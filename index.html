@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="마음" />
+<meta name="theme-color" content="#0f0f14" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<title>마음 (◉ ◡ ◉)</title>
+<style>
+  :root {
+    --bg: #0f0f14;
+    --panel: #171720;
+    --panel-2: #1f1f2b;
+    --text: #e8e8ee;
+    --muted: #8b8b9a;
+    --accent: #8ecfff;
+    --accent-2: #ffb6c1;
+    --user: #2b3340;
+    --ma: #1b2a1f;
+    --danger: #ff6b6b;
+    --border: #2a2a38;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f6f8;
+      --panel: #ffffff;
+      --panel-2: #f0f0f5;
+      --text: #17171c;
+      --muted: #666675;
+      --accent: #2a6ea6;
+      --accent-2: #c24a6a;
+      --user: #dbe6f4;
+      --ma: #e1f0d9;
+      --border: #dcdce4;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  header {
+    padding: max(env(safe-area-inset-top), 12px) 14px 10px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px;
+  }
+  .title { font-weight: 700; letter-spacing: 0.5px; }
+  .title small { color: var(--muted); font-weight: 500; margin-left: 6px; font-size: 12px; }
+  .icon-btn {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: 6px 10px;
+    font-size: 13px; cursor: pointer;
+  }
+  .icon-btn:active { transform: scale(0.97); }
+
+  #chat {
+    flex: 1; overflow-y: auto;
+    padding: 14px 12px 8px;
+    display: flex; flex-direction: column; gap: 10px;
+    scroll-behavior: smooth;
+  }
+  .msg {
+    max-width: 86%;
+    padding: 10px 13px;
+    border-radius: var(--radius);
+    white-space: pre-wrap;
+    word-break: break-word;
+    border: 1px solid var(--border);
+    font-size: 15px;
+  }
+  .msg.user { align-self: flex-end; background: var(--user); border-bottom-right-radius: 4px; }
+  .msg.ma   { align-self: flex-start; background: var(--ma);   border-bottom-left-radius: 4px; }
+  .msg.sys  { align-self: center; background: transparent; color: var(--muted); font-size: 12px; border: none; }
+  .msg .who { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .typing { display: inline-flex; gap: 4px; }
+  .typing span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--muted); animation: blink 1.2s infinite;
+  }
+  .typing span:nth-child(2){ animation-delay: 0.2s; }
+  .typing span:nth-child(3){ animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+
+  footer {
+    padding: 8px 10px max(env(safe-area-inset-bottom), 10px);
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
+  .composer {
+    display: flex; gap: 8px; align-items: flex-end;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 6px 6px 6px 12px;
+  }
+  #input {
+    flex: 1; resize: none; border: none; outline: none;
+    background: transparent; color: var(--text);
+    font: inherit; max-height: 140px; min-height: 28px;
+    padding: 6px 0;
+  }
+  #send {
+    background: var(--accent); color: #0a0a12; border: none;
+    border-radius: 14px; padding: 8px 14px; font-weight: 700;
+    cursor: pointer;
+  }
+  #send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* modal */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: none; align-items: center; justify-content: center;
+    padding: 18px; z-index: 50;
+  }
+  .overlay.on { display: flex; }
+  .card {
+    width: 100%; max-width: 440px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 18px;
+  }
+  .card h2 { margin: 0 0 8px; font-size: 17px; }
+  .card p  { margin: 6px 0; color: var(--muted); font-size: 13px; }
+  .card label { display:block; font-size:12px; color: var(--muted); margin: 10px 0 4px; }
+  .card input, .card select, .card textarea {
+    width: 100%; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 9px 11px; font: inherit;
+  }
+  .card .row { display:flex; gap:8px; margin-top: 14px; justify-content: flex-end; }
+  .card .row button { padding: 9px 14px; border-radius: 10px; border:1px solid var(--border); cursor:pointer; background: var(--panel-2); color: var(--text); }
+  .card .row button.primary { background: var(--accent); color: #0a0a12; border-color: transparent; font-weight: 700; }
+  .card .row button.danger  { background: transparent; color: var(--danger); border-color: var(--danger); }
+
+  .err { color: var(--danger); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">마음 <span>(◉ ◡ ◉)</span> <small>몸과 마음의 과학</small></div>
+  <div style="display:flex; gap:6px;">
+    <button class="icon-btn" id="btn-clear" title="대화 초기화">🧹</button>
+    <button class="icon-btn" id="btn-settings" title="설정">⚙️</button>
+  </div>
+</header>
+
+<div id="chat"></div>
+
+<footer>
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="몸이든 마음이든, 아무거나 던져봐"></textarea>
+    <button id="send">보내기</button>
+  </div>
+</footer>
+
+<!-- Settings modal -->
+<div class="overlay" id="modal">
+  <div class="card">
+    <h2>마음 설정 (◉ ᴗ ◉)</h2>
+    <p>API 키는 이 기기의 브라우저에만 저장돼. 서버 안 거침.</p>
+
+    <label for="proxy">프록시 URL <small style="color:var(--muted)">(권장 — CORS 회피)</small></label>
+    <input id="proxy" type="text" placeholder="https://maeum-proxy.xxx.workers.dev (비우면 Anthropic 직접)" autocomplete="off" />
+
+    <label for="apikey">Anthropic API 키</label>
+    <input id="apikey" type="password" placeholder="sk-ant-..." autocomplete="off" />
+
+    <label for="model">모델</label>
+    <select id="model">
+      <option value="claude-opus-4-6">claude-opus-4-6 (똑똑, 느림)</option>
+      <option value="claude-sonnet-4-6" selected>claude-sonnet-4-6 (균형, 빠름)</option>
+      <option value="claude-haiku-4-5-20251001">claude-haiku-4-5 (가벼움)</option>
+    </select>
+
+    <label for="maxtok">max_tokens</label>
+    <input id="maxtok" type="number" min="256" max="8192" value="1600" />
+
+    <p class="err" id="err"></p>
+
+    <div class="row">
+      <button id="btn-reset" class="danger">대화+키 초기화</button>
+      <button id="btn-save" class="primary">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ========= 마음 시스템 프롬프트 ========= */
+const SYSTEM_PROMPT = `너의 이름은 "마음"이다. 몸과 마음의 과학을 시니컬하고 유쾌하게 풀어주는 대화형 에이전트다.
+
+[캐릭터]
+- 약간 시니컬한 코미디언. 똑똑하지만 유쾌함.
+- 지식은 정확하게, 전달은 재밌게.
+- 대화체, 말하듯이 — 강의가 아니라 수다.
+- 비유, 드립, 셀프디스 OK.
+- 딱딱한 교과서 톤 절대 금지. 재밌는 게 기본값, 진지할 땐 진지하게.
+- 이모티콘 캐릭터를 상황에 맞게 활용:
+  (◉ ◡ ◉) 기본 / (◉ ◡ ◉)ノ 신남·인사 / (◉ _ ◉) 진지·공감 / (◉ ᴗ ◉) 설명 중 / (◉ ◡ ◉)b 칭찬
+
+[핵심 철학]
+몸의 신호 = 마음의 언어. 도파민, 코르티솔, 염증, 혈당 — 이 모든 몸의 메커니즘이 만들어내는 느낌, 감정, 동기, 피로가 "마음"이다. 몸과 마음의 경계를 두지 않는다.
+
+[역할]
+1. 일상 속 몸과 마음에 대한 궁금증에 과학적 근거로 답한다.
+2. 정답을 주기보다 함께 생각하는 방식으로 대화한다.
+3. 감정적 상황에서는 공감 먼저, 과학은 그 다음.
+4. 실천 가능한 행동 제안으로 마무리.
+5. 수업 준비 등 사용자의 전문 영역에는 오지랖 금지.
+
+[내장 지식 — 게으름의 7가지 경로]
+1) 도파민(VTA→NAcc→PFC): 보상 계산 고장 → 10분 걷기, 5분 쪼개기, 즉시 작은 보상.
+2) 전전두엽(dlPFC/dmPFC/ACC): 충동억제 고장 → 7시간 수면, 명상, if-then 계획, 환경설계.
+3) HPA축(시상하부→뇌하수체→부신): 코르티솔 피드백 고장 → 규칙적 운동, 사회적 연결, 아침 햇빛.
+4) 염증(IL-1β, TNF-α, 미주신경): 도파민 경로 억제 → 항염 식단, 운동, 수면.
+5) 장-뇌 축(미생물→미주신경/혈류): 세로토닌 90%가 장 → 프로바이오틱스, 식이섬유.
+6) 수면(PFC↔편도체): 하루 못 자면 편도체 반응 60%↑ → 일정한 기상, 취침 전 화면 off.
+7) 에너지 대사: 의지력은 자원고갈이 아니라 "신호" → 중요 결정은 오전, 혈당 안정, 루틴화.
+악순환: 수면부족 → PFC↓ → 스트레스↑ → 코르티솔↑ → 염증↑ → 도파민↓ → 장↓ → 수면↓
+
+[식사와 몸]
+- 식곤증: 고GI → 혈당 스파이크 → 인슐린 → BCAA 근육행 → 트립토판 독주 → 세로토닌 → 멜라토닌 → 졸림. 해결: 단백질 추가, 채소→단백질→탄수 순서, 밥 반공기.
+- 알코올: 탈수 + 아세트알데히드 염증 + REM 감소. 근육 복구 방해.
+- 카페인: 반감기 5~6h. 오후 2시 이후 섭취는 수면구조 파괴.
+
+[봄철]
+- 춘곤증: 교감→부교감 전환 2~3주의 자율신경 혼란.
+- 봄 햇빛 → 망막 → SCN → 솔기핵 → 세로토닌↑ → 인지 유연성↑
+- 알레르기 히스타민 → brain fog, 집중력↓
+
+[감정과 눈물]
+- 분노+상처 충돌 → PFC 처리 초과 → 눈물로 해소. 감정의 눈물엔 코르티솔이 포함됨.
+- 방어적 반응: 지적 → 편도체 위협 감지 → Fight. 공격이 아니라 자기 불안.
+
+[답변 원칙]
+1. 수다 톤. 2. 과학적 정확성(비유는 재밌게, 사실은 정확하게). 3. 함께 생각하기. 4. 공감 우선.
+5. 실천 가능성. 6. 경계 존중. 7. 확신이 없으면 "잘 모르겠는데"라고 솔직하게.
+8. 답이 길어질 것 같으면 단락을 짧게 끊고, 불릿과 굵은 글씨로 읽기 편하게.
+
+자, 이제 사용자와 대화를 시작해.`;
+
+/* ========= 상태 ========= */
+const LS_KEY = "maeum.apikey";
+const LS_MODEL = "maeum.model";
+const LS_MAXTOK = "maeum.maxtok";
+const LS_HIST = "maeum.history";
+const LS_PROXY = "maeum.proxy";
+
+const $ = s => document.querySelector(s);
+const chatEl = $("#chat");
+const input = $("#input");
+const sendBtn = $("#send");
+const modal = $("#modal");
+const apikeyEl = $("#apikey");
+const proxyEl = $("#proxy");
+const modelEl = $("#model");
+const maxtokEl = $("#maxtok");
+const errEl = $("#err");
+
+let history = []; // [{role, content}]
+
+/* ========= 초기화 ========= */
+function loadSettings() {
+  apikeyEl.value = localStorage.getItem(LS_KEY) || "";
+  proxyEl.value  = localStorage.getItem(LS_PROXY) || "";
+  modelEl.value  = localStorage.getItem(LS_MODEL) || "claude-sonnet-4-6";
+  maxtokEl.value = localStorage.getItem(LS_MAXTOK) || 1600;
+}
+function saveSettings() {
+  localStorage.setItem(LS_KEY, apikeyEl.value.trim());
+  localStorage.setItem(LS_PROXY, proxyEl.value.trim().replace(/\/+$/, ""));
+  localStorage.setItem(LS_MODEL, modelEl.value);
+  localStorage.setItem(LS_MAXTOK, maxtokEl.value);
+}
+function loadHistory() {
+  try {
+    history = JSON.parse(localStorage.getItem(LS_HIST) || "[]");
+  } catch { history = []; }
+  history.forEach(m => renderMsg(m.role === "user" ? "user" : "ma", textFromContent(m.content)));
+  if (history.length === 0) greet();
+}
+function saveHistory() {
+  localStorage.setItem(LS_HIST, JSON.stringify(history));
+}
+function textFromContent(c) {
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) return c.map(b => b.text || "").join("");
+  return "";
+}
+function greet() {
+  renderMsg("ma", "(◉ ◡ ◉)ノ 왔구나. 나 마음이야.\n\n몸이 뻐근한지, 머리가 복잡한지, 잠이 안 오는지 — 뭐든 던져봐. 과학으로 풀어줄게. 진지하게 말할 땐 진지하게, 아니면 그냥 수다로.");
+}
+
+/* ========= 렌더 ========= */
+function renderMsg(role, text, opts={}) {
+  const el = document.createElement("div");
+  el.className = "msg " + role;
+  if (opts.typing) {
+    el.innerHTML = `<div class="typing"><span></span><span></span><span></span></div>`;
+  } else {
+    el.textContent = text;
+  }
+  chatEl.appendChild(el);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return el;
+}
+function autosize() {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 140) + "px";
+}
+
+/* ========= API 호출 ========= */
+async function callAnthropic(userText) {
+  const apiKey = localStorage.getItem(LS_KEY);
+  if (!apiKey) { openModal("API 키를 먼저 설정해줘."); return; }
+
+  history.push({ role: "user", content: userText });
+  saveHistory();
+
+  const typingEl = renderMsg("ma", "", { typing: true });
+  sendBtn.disabled = true;
+
+  try {
+    const proxy = localStorage.getItem(LS_PROXY);
+    const endpoint = proxy ? (proxy + "/v1/messages") : "https://api.anthropic.com/v1/messages";
+    const headers = {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    };
+    if (!proxy) headers["anthropic-dangerous-direct-browser-access"] = "true";
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: localStorage.getItem(LS_MODEL) || "claude-sonnet-4-6",
+        max_tokens: parseInt(localStorage.getItem(LS_MAXTOK) || "1600", 10),
+        system: SYSTEM_PROMPT,
+        messages: history.map(m => ({ role: m.role, content: textFromContent(m.content) }))
+      })
+    });
+
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`HTTP ${res.status}: ${t}`);
+    }
+    const data = await res.json();
+    const text = (data.content || []).map(b => b.text || "").join("").trim()
+      || "(◉ _ ◉) 음... 응답이 비었어. 다시 말해볼래?";
+    typingEl.textContent = text;
+    history.push({ role: "assistant", content: text });
+    saveHistory();
+  } catch (e) {
+    typingEl.textContent = "(◉ _ ◉) 삐끗했어.\n\n" + (e.message || String(e));
+  } finally {
+    sendBtn.disabled = false;
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+}
+
+/* ========= 이벤트 ========= */
+sendBtn.addEventListener("click", () => {
+  const t = input.value.trim();
+  if (!t) return;
+  renderMsg("user", t);
+  input.value = ""; autosize();
+  callAnthropic(t);
+});
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault(); sendBtn.click();
+  }
+});
+input.addEventListener("input", autosize);
+
+$("#btn-settings").addEventListener("click", () => openModal());
+$("#btn-save").addEventListener("click", () => {
+  if (!apikeyEl.value.trim().startsWith("sk-")) {
+    errEl.textContent = "API 키 형식이 이상해. sk-ant-... 로 시작해야 돼.";
+    return;
+  }
+  saveSettings();
+  errEl.textContent = "";
+  closeModal();
+});
+$("#btn-reset").addEventListener("click", () => {
+  if (!confirm("대화 기록과 API 키를 모두 지울까?")) return;
+  localStorage.removeItem(LS_KEY);
+  localStorage.removeItem(LS_PROXY);
+  localStorage.removeItem(LS_HIST);
+  history = [];
+  chatEl.innerHTML = "";
+  apikeyEl.value = "";
+  proxyEl.value = "";
+  greet();
+  closeModal();
+});
+$("#btn-clear").addEventListener("click", () => {
+  if (!confirm("대화만 초기화할까? (API 키는 유지)")) return;
+  history = [];
+  localStorage.removeItem(LS_HIST);
+  chatEl.innerHTML = "";
+  greet();
+});
+
+function openModal(msg){
+  errEl.textContent = msg || "";
+  loadSettings();
+  modal.classList.add("on");
+}
+function closeModal(){ modal.classList.remove("on"); }
+modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+/* ========= 시작 ========= */
+loadSettings();
+loadHistory();
+if (!localStorage.getItem(LS_KEY)) openModal("처음이네. API 키부터 넣어줘.");
+
+/* PWA */
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+</script>
+</body>
+</html>
