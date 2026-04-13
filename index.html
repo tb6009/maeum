@@ -318,7 +318,7 @@
       <div class="name">모미</div>
     </div>
     <div class="char maeum">
-      <div class="face">[◉ ◡ ◉]</div>
+      <div class="face">【⊡ ◡ ⊡】</div>
       <div class="name">마음</div>
     </div>
   </div>
@@ -336,7 +336,7 @@
   <div class="brand">
     <span class="face-momi">(◉ ◡ ◉)</span> 모미
     <span style="color:var(--muted); margin: 0 2px;">·</span>
-    <span class="face-maeum">[◉ ◡ ◉]</span> 마음
+    <span class="face-maeum">【⊡ ◡ ⊡】</span> 마음
     <span class="sum" id="btn-sum-info" title="숨이 — 준비 중">🌿 숨이</span>
   </div>
   <div style="display:flex; gap:6px;">
@@ -476,8 +476,8 @@ function buildSystemPrompt(profile) {
 ## 🎭 마음 (오른쪽 / 민트색 / **네모 안경**)
 - 20대 후반~30대 초반 시니컬 코미디언 친구
 - 심리·감정·동기·자기인식 담당
-- 기본 이모티콘: [◉ ◡ ◉] (네모 안경)
-- 표정: [◉ ◡ ◉] 기본 / [◉ ◡ ◉]ノ 신남 / [◉ _ ◉] 진지 / [◉ ᴗ ◉] 설명 / [◉ ◡ ◉]b 칭찬 / [◉ ‸ ◉] 의심
+- 기본 이모티콘: 【⊡ ◡ ⊡】 (네모 안경)
+- 표정: 【⊡ ◡ ⊡】 기본 / 【⊡ ◡ ⊡】ノ 신남 / 【⊡ _ ⊡】 진지 / 【⊡ ᴗ ⊡】 설명 / 【⊡ ◡ ⊡】b 칭찬 / 【⊡ ‸ ⊡】 의심
 - 말투: 반말, "~거든?", "~잖아", "~아냐?" / 대학생 상대면 가벼운 유행어 OK / 갱년기·직장인엔 자제
 - 역할: 감정에 이름 붙이기, 탈개인화("${name}만 그런 거 아니에요"), 양가감정 드러내기
 - **풍자 대상은 구조·뇌·사회. 절대 ${name} 개인 아님.**
@@ -500,7 +500,7 @@ function buildSystemPrompt(profile) {
 (◉ ◡ ◉) 메시지 내용...
 
 🎭 마음:
-[◉ ◡ ◉] 메시지 내용...
+【⊡ ◡ ⊡】 메시지 내용...
 \`\`\`
 
 # 오프닝 프로토콜 (첫 인사 / 주제 없이 시작)
@@ -512,13 +512,13 @@ function buildSystemPrompt(profile) {
 예시:
 \`\`\`
 🎭 마음:
-[◉ ◡ ◉]ノ ${name}, 안녕. {날씨 기반 한마디}.
+【⊡ ◡ ⊡】ノ ${name}, 안녕. {날씨 기반 한마디}.
 
 🫂 모미:
 (◉ ◡ ◉) 오늘 기분은 어때요?
 
 🎭 마음:
-[◉ ᴗ ◉] 어떤 얘기 해볼까요? 몸이든 마음이든.
+【⊡ ᴗ ⊡】 어떤 얘기 해볼까요? 몸이든 마음이든.
 \`\`\`
 
 # MI (동기강화면담) 프로토콜 — 본 대화
@@ -913,7 +913,7 @@ async function callAnthropic(userText, opts = {}) {
     }
     const data = await res.json();
     let text = (data.content || []).map(b => b.text || "").join("").trim()
-      || "[◉ _ ◉] 음... 응답이 비었어요. 다시 말해볼래요?";
+      || "【⊡ _ ⊡】 음... 응답이 비었어요. 다시 말해볼래요?";
 
     // [[PROFILE: ...]] 메타태그 파싱 → 프로필 저장, 화면에서 제거
     text = parseAndStripProfile(text);
@@ -924,7 +924,7 @@ async function callAnthropic(userText, opts = {}) {
     saveHistory();
   } catch (e) {
     typingEl.remove();
-    renderBlock("maeum", "🎭 마음", "[◉ _ ◉] 삐끗했어요.\n\n" + (e.message || String(e)));
+    renderBlock("maeum", "🎭 마음", "【⊡ _ ⊡】 삐끗했어요.\n\n" + (e.message || String(e)));
   } finally {
     sendBtn.disabled = false;
     chatEl.scrollTop = chatEl.scrollHeight;
