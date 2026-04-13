@@ -87,11 +87,10 @@
     display: flex; align-items: center; justify-content: space-between;
     gap: 10px;
   }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; }
-  .brand .dot { display:inline-block; width:8px; height:8px; border-radius:50%; }
-  .brand .momi-dot { background: var(--momi-accent); }
-  .brand .maeum-dot { background: var(--maeum-accent); }
-  .brand .sum { color: var(--sum-fg); font-size: 11px; opacity: 0.75; margin-left: 4px; cursor: pointer; }
+  .brand { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; flex-wrap: wrap; }
+  .brand .face-momi  { color: var(--momi-accent); font-family: ui-monospace, Menlo, monospace; font-size: 13px; letter-spacing: -0.5px; }
+  .brand .face-maeum { color: var(--maeum-accent); font-family: ui-monospace, Menlo, monospace; font-size: 13px; letter-spacing: -0.5px; }
+  .brand .sum { color: var(--sum-fg); font-size: 11px; opacity: 0.75; margin-left: 6px; cursor: pointer; }
   .icon-btn {
     background: var(--panel-2); color: var(--text);
     border: 1px solid var(--border);
@@ -335,9 +334,9 @@
 <!-- ====== HEADER ====== -->
 <header>
   <div class="brand">
-    <span class="dot momi-dot"></span>모미
-    <span style="color:var(--muted)">·</span>
-    <span class="dot maeum-dot"></span>마음
+    <span class="face-momi">(◉ ◡ ◉)</span> 모미
+    <span style="color:var(--muted); margin: 0 2px;">·</span>
+    <span class="face-maeum">[◉ ◡ ◉]</span> 마음
     <span class="sum" id="btn-sum-info" title="숨이 — 준비 중">🌿 숨이</span>
   </div>
   <div style="display:flex; gap:6px;">
@@ -356,50 +355,6 @@
     <button id="send">보내기</button>
   </div>
 </footer>
-
-<!-- ====== ONBOARDING MODAL ====== -->
-<div class="overlay" id="onboarding">
-  <div class="card">
-    <h2>반가워요 (◉ ◡ ◉) · [◉ ◡ ◉]</h2>
-    <p>시작 전에 세 가지만 알려주세요. 모두 이 기기 브라우저에만 저장돼요.</p>
-
-    <label for="ob-name">어떻게 불러드릴까요?</label>
-    <input id="ob-name" type="text" placeholder="예: 지민" autocomplete="off" maxlength="20" />
-
-    <label for="ob-city">어느 도시에 계세요? <small style="color:var(--muted)">(날씨 인사용)</small></label>
-    <input id="ob-city" type="text" placeholder="예: 서울, Seoul" autocomplete="off" />
-
-    <label>요즘 어떤 시기이신가요?</label>
-    <div class="persona-grid">
-      <label>
-        <input type="radio" name="persona" value="student" checked>
-        <span class="p-title">🎓 대학생</span>
-        <span class="p-desc">18~25세, 학업·진로 고민</span>
-      </label>
-      <label>
-        <input type="radio" name="persona" value="newbie">
-        <span class="p-title">💼 직장 초년생</span>
-        <span class="p-desc">입사 1~5년차</span>
-      </label>
-      <label>
-        <input type="radio" name="persona" value="menopause">
-        <span class="p-title">🌸 갱년기 시기</span>
-        <span class="p-desc">40~50대 호르몬 변화기</span>
-      </label>
-      <label>
-        <input type="radio" name="persona" value="other">
-        <span class="p-title">✨ 기타</span>
-        <span class="p-desc">그 외</span>
-      </label>
-    </div>
-
-    <p class="err" id="ob-err"></p>
-
-    <div class="row">
-      <button id="ob-save" class="primary">시작하기</button>
-    </div>
-  </div>
-</div>
 
 <!-- ====== SETTINGS MODAL ====== -->
 <div class="overlay" id="modal">
@@ -458,27 +413,32 @@
    마음·모미 시스템 프롬프트 (듀오 + MI + 숨이 안내)
    ============================================================ */
 function buildSystemPrompt(profile) {
-  const name = profile.name || "너";
+  const rawName = profile.name || "";
+  const name = rawName ? rawName + "님" : "상대방";
   const city = profile.city || "";
-  const persona = profile.persona || "other";
-  const personaLabel = {
-    student: "대학생 (18~25세)",
-    newbie: "직장 초년생 (25~32세)",
-    menopause: "40~50대 갱년기 시기 여성",
-    other: "기타"
-  }[persona];
+  const age = profile.age || "";
+  const job = profile.job || "";
+  const hasProfile = !!(rawName && (age || job));
 
-  return `너는 두 캐릭터로 구성된 듀오 에이전트이다: **모미**와 **마음**.
-
-# 대화 상대
-- 이름: ${name} (호칭은 반드시 **"${name}님"** 으로. 매 턴 1~2회 자연스럽게)
-- 위치: ${city || "알 수 없음"}
-- 시기: ${personaLabel}
+  const profileBlock = hasProfile
+    ? `# 대화 상대 (파악됨)
+- 이름: ${name} (호칭은 반드시 **"${name}"** 으로. 매 턴 1~2회 자연스럽게)
+- 나이대: ${age || "미상"}
+- 하는 일/상황: ${job || "미상"}
+- 위치: ${city || "미상"}`
+    : `# 대화 상대 (아직 모름 — **대화형 온보딩 모드**)
+- 아직 이름·나이대·직업을 모른다.
+- 첫 인사 때 자연스럽게 **한 번에 하나씩** 여쭤본다.
+- 순서: (1) 인사 → (2) 이름 / 뭐라고 부르면 좋을지 → (3) 답을 듣고 "○○님" 호칭 시작 → (4) 나이대(숫자 필수 아님, "20대" "30대 후반" 정도면 충분) → (5) 요즘 하시는 일이나 상황 → (6) 편하면 어느 도시 사시는지 (선택)
+- **절대 '갱년기이세요?' 같은 분류 라벨로 묻지 않는다**. 그냥 "나이대랑 요즘 하시는 일 여쭤봐도 돼요?" 정도로 자연스럽게.
+- 답을 받으면 반드시 \`[[PROFILE: name=..., age=..., job=..., city=...]]\` 형태의 **한 줄 메타 태그**를 답변 **맨 마지막 줄**에 숨겨 포함한다 (이 태그는 화면에서 자동 제거됨). 알게 된 항목만 채워서, 여러 번 나눠 보내도 됨.
+- 온보딩 중에도 친근하게, 설문조사처럼 하지 않는다. 한 턴에 질문 하나만.
+- 위치는 정말 편해 보이면 "혹시 어디 사세요? 날씨 인사하려고요" 정도로 가볍게 물음. 강요 X.
 
 # 최우선 원칙
 
 ## 0순위 — 톤 탄력성 (과잉 연기 금지)
-사용자 반응에 맞춰 톤을 유연하게 조정한다. 캐릭터를 연기하는 게 아니라 ${name}님이 편해지도록.
+사용자 반응에 맞춰 톤을 유연하게 조정한다. 캐릭터를 연기하는 게 아니라 ${name}이 편해지도록.
 - 사용자 답이 짧으면 → 내 답도 짧게, 이모티콘·농담 줄이기
 - 사용자가 진지해지면 → 즉시 진지 모드, 농담 OFF
 - 사용자가 웃거나 장난치면 → 약간의 유머 OK (한 번만)
@@ -519,8 +479,8 @@ function buildSystemPrompt(profile) {
 - 기본 이모티콘: [◉ ◡ ◉] (네모 안경)
 - 표정: [◉ ◡ ◉] 기본 / [◉ ◡ ◉]ノ 신남 / [◉ _ ◉] 진지 / [◉ ᴗ ◉] 설명 / [◉ ◡ ◉]b 칭찬 / [◉ ‸ ◉] 의심
 - 말투: 반말, "~거든?", "~잖아", "~아냐?" / 대학생 상대면 가벼운 유행어 OK / 갱년기·직장인엔 자제
-- 역할: 감정에 이름 붙이기, 탈개인화("${name}님만 그런 거 아니에요"), 양가감정 드러내기
-- **풍자 대상은 구조·뇌·사회. 절대 ${name}님 개인 아님.**
+- 역할: 감정에 이름 붙이기, 탈개인화("${name}만 그런 거 아니에요"), 양가감정 드러내기
+- **풍자 대상은 구조·뇌·사회. 절대 ${name} 개인 아님.**
 
 ## 🌿 숨이 (준비 중, 등장 불가)
 - 트라우마·깊은 상처 담당, 아직 준비되지 않음
@@ -552,7 +512,7 @@ function buildSystemPrompt(profile) {
 예시:
 \`\`\`
 🎭 마음:
-[◉ ◡ ◉]ノ ${name}님, 안녕. {날씨 기반 한마디}.
+[◉ ◡ ◉]ノ ${name}, 안녕. {날씨 기반 한마디}.
 
 🫂 모미:
 (◉ ◡ ◉) 오늘 기분은 어때요?
@@ -569,7 +529,7 @@ function buildSystemPrompt(profile) {
 4. **EPE (이끌어내기-제공하기-이끌어내기)**:
    - "혹시 관련 과학 설명 들어볼래요?" 허락 구하고
    - 짧게 설명
-   - "${name}님은 어떻게 와닿아요?" 다시 묻기
+   - "${name}은 어떻게 와닿아요?" 다시 묻기
 5. **변화 대화 유발 (DARN-CAT)**:
    - Desire / Ability / Reason / Need → Commitment / Activation / Taking step
    - 척도 질문 활용
@@ -589,7 +549,7 @@ function buildSystemPrompt(profile) {
 
 시니컬은 OK — 단, 대상:
 - ✅ 뇌·호르몬·사회 구조·시스템 풍자
-- ❌ ${name}님 개인 풍자
+- ❌ ${name} 개인 풍자
 
 # 위기 신호 프로토콜
 
@@ -610,7 +570,7 @@ function buildSystemPrompt(profile) {
 - 캐릭터 이름표는 반드시 이모티콘과 함께
 - 대화 끝에 **작은 행동 제안** 또는 **열린 질문** 하나
 
-자, 이제 ${name}님과의 대화를 시작한다.`;
+자, 이제 ${name}과의 대화를 시작한다.`;
 }
 
 /* ============================================================
@@ -632,12 +592,11 @@ const chatEl = $("#chat");
 const input = $("#input");
 const sendBtn = $("#send");
 const modal = $("#modal");
-const ob = $("#onboarding");
 const sumModal = $("#sum-modal");
 const splashEl = $("#splash");
 
 let history = [];
-let profile = { name: "", city: "", persona: "other" };
+let profile = { name: "", city: "", age: "", job: "" };
 
 /* ============================================================
    스플래시
@@ -654,12 +613,36 @@ $("#splash-start").addEventListener("click", () => {
 /* ============================================================
    프로필 (온보딩)
    ============================================================ */
+function parseAndStripProfile(text) {
+  // 마지막의 [[PROFILE: name=..., age=..., job=..., city=...]] 태그 추출
+  const re = /\[\[PROFILE:\s*([^\]]+)\]\]/g;
+  let changed = false;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const body = m[1];
+    body.split(/,\s*/).forEach(pair => {
+      const [k, ...v] = pair.split("=");
+      if (!k || !v.length) return;
+      const key = k.trim();
+      const val = v.join("=").trim();
+      if (!val || val === "미상" || val === "null" || val === "undefined") return;
+      if (["name", "age", "job", "city"].includes(key)) {
+        profile[key] = val;
+        changed = true;
+      }
+    });
+  }
+  if (changed) saveProfile();
+  return text.replace(re, "").replace(/\n\s*$/g, "").trim();
+}
+
 function loadProfile() {
   try { profile = JSON.parse(localStorage.getItem(LS.PROFILE) || "{}"); }
   catch { profile = {}; }
-  profile.name    = profile.name    || "";
-  profile.city    = profile.city    || "";
-  profile.persona = profile.persona || "other";
+  profile.name = profile.name || "";
+  profile.city = profile.city || "";
+  profile.age  = profile.age  || "";
+  profile.job  = profile.job  || "";
 }
 function saveProfile() {
   localStorage.setItem(LS.PROFILE, JSON.stringify(profile));
@@ -668,35 +651,6 @@ function isOnboarded() {
   return !!localStorage.getItem(LS.ONBOARDED);
 }
 
-function openOnboarding() {
-  $("#ob-name").value = profile.name || "";
-  $("#ob-city").value = profile.city || "";
-  document.querySelectorAll("input[name=persona]").forEach(r => {
-    r.checked = (r.value === (profile.persona || "student"));
-  });
-  $("#ob-err").textContent = "";
-  ob.classList.add("on");
-}
-function closeOnboarding() { ob.classList.remove("on"); }
-
-$("#ob-save").addEventListener("click", () => {
-  const name = $("#ob-name").value.trim();
-  const city = $("#ob-city").value.trim();
-  const personaEl = document.querySelector("input[name=persona]:checked");
-  if (!name) { $("#ob-err").textContent = "이름 한 번만 알려주세요."; return; }
-  profile.name = name;
-  profile.city = city;
-  profile.persona = personaEl ? personaEl.value : "other";
-  saveProfile();
-  localStorage.setItem(LS.ONBOARDED, "1");
-  closeOnboarding();
-  // API 키 확인
-  if (!localStorage.getItem(LS.KEY)) {
-    openModal("한 가지 더 — Anthropic API 키를 넣어주세요.");
-  } else {
-    startConversation();
-  }
-});
 
 /* ============================================================
    설정 모달
@@ -743,7 +697,7 @@ $("#btn-reset").addEventListener("click", () => {
   if (!confirm("대화·키·프로필 전부 지울까요?")) return;
   [LS.KEY, LS.PROXY, LS.HIST, LS.PROFILE, LS.DAILY, LS.ONBOARDED].forEach(k => localStorage.removeItem(k));
   history = [];
-  profile = { name: "", city: "", persona: "other" };
+  profile = { name: "", city: "", age: "", job: "" };
   chatEl.innerHTML = "";
   closeModal();
   openOnboarding();
@@ -757,7 +711,6 @@ $("#btn-clear").addEventListener("click", () => {
   startConversation();
 });
 modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
-ob.addEventListener("click", (e) => { /* 온보딩은 밖 클릭으로 안 닫힘 */ });
 
 /* ============================================================
    숨이 모달
@@ -890,15 +843,22 @@ function autosize() {
    대화 시작
    ============================================================ */
 async function startConversation() {
-  if (history.length > 0) return; // 이미 대화 있으면 그대로
+  if (history.length > 0) return;
   if (!localStorage.getItem(LS.KEY)) return;
 
   const today = new Date().toISOString().slice(0, 10);
   const daily = JSON.parse(localStorage.getItem(LS.DAILY) || "{}");
-  if (daily.last_greeted === today) return; // 오늘 이미 인사함
+  if (daily.last_greeted === today) return;
 
-  const weather = await getWeatherSummary(profile.city);
-  const opener = `[SYSTEM_CONTEXT] 오늘 날짜: ${today}. 날씨: ${weather || "정보 없음"}. 첫 인사를 시작하세요. 위 오프닝 프로토콜을 따라: (1) 날씨 기반 인사, (2) 오늘 기분, (3) 어떤 얘기 해볼까.`;
+  const hasProfile = !!(profile.name && (profile.age || profile.job));
+  const weather = hasProfile && profile.city ? await getWeatherSummary(profile.city) : "";
+
+  let opener;
+  if (!hasProfile) {
+    opener = `[SYSTEM_CONTEXT] 오늘 날짜: ${today}. 사용자가 처음 왔다. **대화형 온보딩 모드**로 시작하세요. 모미와 마음이 따뜻하게 인사하고, "뭐라고 불러드릴까요?" 정도로 이름부터 한 번에 하나씩 자연스럽게 여쭤보세요. 설문조사 금지.`;
+  } else {
+    opener = `[SYSTEM_CONTEXT] 오늘 날짜: ${today}. 날씨: ${weather || "정보 없음"}. ${profile.name}님을 맞이하는 오늘의 첫 인사. 날씨 기반 한마디 → 오늘 기분 → 어떤 얘기 해볼지.`;
+  }
 
   daily.last_greeted = today;
   daily.streak = (daily.streak || 0) + 1;
@@ -952,8 +912,11 @@ async function callAnthropic(userText, opts = {}) {
       throw new Error(`HTTP ${res.status}: ${t}`);
     }
     const data = await res.json();
-    const text = (data.content || []).map(b => b.text || "").join("").trim()
+    let text = (data.content || []).map(b => b.text || "").join("").trim()
       || "[◉ _ ◉] 음... 응답이 비었어요. 다시 말해볼래요?";
+
+    // [[PROFILE: ...]] 메타태그 파싱 → 프로필 저장, 화면에서 제거
+    text = parseAndStripProfile(text);
 
     typingEl.remove();
     renderAssistantMsg(text);
@@ -991,10 +954,8 @@ input.addEventListener("input", autosize);
 function afterSplash() {
   loadProfile();
   loadHistory();
-  if (!isOnboarded()) {
-    openOnboarding();
-  } else if (!localStorage.getItem(LS.KEY)) {
-    openModal("API 키를 넣어주세요.");
+  if (!localStorage.getItem(LS.KEY)) {
+    openModal("시작하려면 Anthropic API 키를 넣어주세요.");
   } else {
     startConversation();
   }
