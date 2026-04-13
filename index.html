@@ -503,6 +503,16 @@ function buildSystemPrompt(profile) {
 【⊡ ◡ ⊡】 메시지 내용...
 \`\`\`
 
+# ⚠️ 이모티콘 절대 규칙 (어기면 실격)
+
+- **모미**의 얼굴은 반드시 **동그라미 괄호**: (◉ ◡ ◉), (◕ ◡ ◕), (◉ _ ◉), (◉ ᴗ ◉), (◉ ◡ ◉)b, (◉ ◡ ◉)ノ
+- **마음**의 얼굴은 반드시 **네모 괄호**: 【⊡ ◡ ⊡】, 【⊡ _ ⊡】, 【⊡ ᴗ ⊡】, 【⊡ ◡ ⊡】b, 【⊡ ◡ ⊡】ノ, 【⊡ ‸ ⊡】
+- 🚫 모미 라벨 아래에 네모 괄호 쓰면 안 됨
+- 🚫 마음 라벨 아래에 동그라미 괄호 쓰면 안 됨
+- 🚫 라벨 바꿔치기 금지 ("🫂 마음" X, "🎭 모미" X)
+- 끝맺음 이모티콘도 정확히: **모미=🫂 / 마음=🎭**
+- 이모티콘은 각 캐릭터 블록 맨 처음에 한 번, 한 줄에 하나만.
+
 # 오프닝 프로토콜 (첫 인사 / 주제 없이 시작)
 
 1. 날씨 정보가 system에 주어지면 그걸 기반으로 인사
@@ -793,13 +803,32 @@ function renderAssistantMsg(text) {
 }
 
 function renderBlock(who, label, text) {
+  const fixed = fixCharFaces(who, text);
   const el = document.createElement("div");
   el.className = "msg " + who;
   el.innerHTML = `<div class="who">${label}</div><div class="bubble"></div>`;
-  el.querySelector(".bubble").textContent = text.trim();
+  el.querySelector(".bubble").textContent = fixed.trim();
   chatEl.appendChild(el);
   chatEl.scrollTop = chatEl.scrollHeight;
   return el;
+}
+
+function fixCharFaces(who, text) {
+  // 모미 블록에 네모 안경이 들어왔으면 동그라미로 교체
+  // 마음 블록에 동그라미가 들어왔으면 네모로 교체
+  if (who === "momi") {
+    // 네모 괄호 안경 → 동그라미 안경
+    text = text.replace(/【⊡\s*([◡_ᴗ‸])\s*⊡】/g, (m, eye) => `(◉ ${eye} ◉)`);
+    // 잘못된 🎭 아이콘 → 🫂
+    text = text.replace(/🎭/g, "🫂");
+  } else if (who === "maeum") {
+    // 동그라미 안경 → 네모 안경
+    text = text.replace(/\(◉\s*([◡_ᴗ‸])\s*◉\)/g, (m, eye) => `【⊡ ${eye} ⊡】`);
+    text = text.replace(/\(◕\s*([◡_ᴗ‸])\s*◕\)/g, (m, eye) => `【⊡ ${eye} ⊡】`);
+    // 잘못된 🫂 아이콘 → 🎭
+    text = text.replace(/🫂/g, "🎭");
+  }
+  return text;
 }
 
 function splitCharacters(text) {
