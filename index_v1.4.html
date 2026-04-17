@@ -89,6 +89,19 @@ footer{padding:6px 10px max(env(safe-area-inset-bottom),8px);background:var(--su
 #send{background:var(--maeum-accent);color:#0a0a10;border:none;border-radius:14px;padding:7px 14px;font-weight:700;cursor:pointer;font-size:13px}
 #send:disabled{opacity:.35;cursor:not-allowed}
 
+/* === VOICE === */
+#mic{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:14px;padding:7px 10px;cursor:pointer;font-size:15px;transition:all .2s;flex-shrink:0}
+#mic.on{color:var(--danger);border-color:var(--danger);animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,107,107,.4)}70%{box-shadow:0 0 0 8px rgba(255,107,107,0)}}
+.voice-bar{display:flex;gap:2px;align-items:center}
+.voice-bar button{background:none;border:none;font-size:15px;cursor:pointer;opacity:.4;padding:2px 4px;transition:opacity .15s}
+.voice-bar button.on{opacity:1}
+#chat.no-text .bbl .txt{font-size:0;line-height:0;padding:6px 13px;overflow:hidden}
+#chat.no-text .bbl .txt::after{font-size:11px;line-height:1.4;color:var(--muted)}
+#chat.no-text .bbl.momi .txt::after{content:"♪ 음성 재생";color:var(--momi-accent);opacity:.5}
+#chat.no-text .bbl.maeum .txt::after{content:"♪ 음성 재생";color:var(--maeum-accent);opacity:.5}
+#chat.no-text .bbl.user .txt{font-size:13px;color:var(--text)}
+
 /* === SPLASH === */
 #splash{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:20px;transition:opacity .6s,visibility .6s}
 #splash.hide{opacity:0;visibility:hidden;pointer-events:none}
@@ -149,6 +162,7 @@ footer{padding:6px 10px max(env(safe-area-inset-bottom),8px);background:var(--su
     <span class="ver">v1.4</span>
   </div>
   <div class="hdr-btns">
+    <div class="voice-bar"><button id="btn-tts" title="음성 출력">🔊</button><button id="btn-txt" class="on" title="텍스트 표시">📝</button></div>
     <button id="btn-export" title="대화 내보내기">💾</button>
     <button id="btn-clr" title="초기화">🧹</button>
     <button id="btn-set" title="설정">⚙️</button>
@@ -162,6 +176,7 @@ footer{padding:6px 10px max(env(safe-area-inset-bottom),8px);background:var(--su
 <footer>
   <div class="comp">
     <textarea id="input" rows="1" placeholder="뭐든 편하게 말해봐"></textarea>
+    <button id="mic" title="음성 입력">🎤</button>
     <button id="send">보내기</button>
   </div>
 </footer>
@@ -374,7 +389,7 @@ async function callAPI(userText,opts={}){
     const data=await res.json();
     let text=(data.content||[]).map(b=>b.text||"").join("").trim()||"【⊡ _ ⊡】 응답이 비었어요.";
     text=parseProfile(text);
-    removeTyping();addAssistant(text);
+    removeTyping();addAssistant(text);speakResponse(text);
     history.push({role:"assistant",content:text});
     localStorage.setItem(LS.HIST,JSON.stringify(history));
   }catch(e){removeTyping();addAssistant("【⊡ _ ⊡】 삐끗했어요.\n\n"+e.message)}
@@ -471,6 +486,90 @@ function afterSplash(){
   if(!localStorage.getItem(LS.KEY))openSettings("시작하려면 API 키를 넣어주세요.");
   else startConvo();
 }
+
+/* === VOICE I/O === */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let recog=null,isRec=false;
+let ttsOn=localStorage.getItem("m.tts")==="true";
+let txtOn=localStorage.getItem("m.txtvis")!=="false";
+
+/* Speech Recognition */
+if(SR){
+  recog=new SR();recog.lang="ko-KR";recog.continuous=false;recog.interimResults=true;
+  recog.onresult=e=>{
+    inp.value=Array.from(e.results).map(r=>r[0].transcript).join("");
+    autosize();
+  };
+  recog.onend=()=>{
+    isRec=false;$("#mic").classList.remove("on");
+    inp.placeholder="뭐든 편하게 말해봐";
+    if(inp.value.trim())sendBtn.click();
+  };
+  recog.onerror=e=>{
+    isRec=false;$("#mic").classList.remove("on");
+    inp.placeholder="뭐든 편하게 말해봐";
+    if(e.error==="not-allowed")alert("마이크 권한을 허용해주세요.");
+  };
+}
+
+$("#mic").onclick=()=>{
+  if(!SR){alert("이 브라우저에서 음성 입력을 지원하지 않아요.");return}
+  if(isRec){recog.stop();return}
+  recog.start();isRec=true;
+  $("#mic").classList.add("on");
+  inp.value="";inp.placeholder="듣고 있어요...";
+};
+
+/* TTS — 모미/마음 목소리 구분 */
+function cleanForTTS(text){
+  return text.replace(/🫂|🎭|🌿/g,"").replace(/모미:|마음:/g,"")
+    .replace(/\(◉[^)]*◉\)[ノb]?/g,"").replace(/\(◕[^)]*◕\)/g,"")
+    .replace(/【⊡[^】]*⊡】[ノb]?/g,"").replace(/\[\[PROFILE:[^\]]*\]\]/g,"").trim();
+}
+
+function speakOne(text,who){
+  return new Promise(resolve=>{
+    if(!ttsOn){resolve();return}
+    const clean=cleanForTTS(text);
+    if(!clean){resolve();return}
+    const u=new SpeechSynthesisUtterance(clean);
+    u.lang="ko-KR";
+    /* 모미: 약간 높고 따뜻하게 / 마음: 약간 낮고 빠르게 */
+    if(who==="momi"){u.pitch=1.15;u.rate=0.95}
+    else{u.pitch=0.85;u.rate=1.05}
+    u.onend=resolve;u.onerror=resolve;
+    speechSynthesis.speak(u);
+  });
+}
+
+async function speakResponse(text){
+  if(!ttsOn)return;
+  speechSynthesis.cancel();
+  const blocks=splitBlocks(text);
+  if(!blocks.length){await speakOne(text,"maeum");return}
+  for(const b of blocks)await speakOne(b.text,b.who);
+}
+
+/* TTS 토글 */
+$("#btn-tts").onclick=()=>{
+  ttsOn=!ttsOn;
+  localStorage.setItem("m.tts",JSON.stringify(ttsOn));
+  $("#btn-tts").classList.toggle("on",ttsOn);
+  if(!ttsOn)speechSynthesis.cancel();
+};
+
+/* 텍스트 토글 */
+$("#btn-txt").onclick=()=>{
+  txtOn=!txtOn;
+  localStorage.setItem("m.txtvis",JSON.stringify(txtOn));
+  $("#btn-txt").classList.toggle("on",txtOn);
+  chatEl.classList.toggle("no-text",!txtOn);
+};
+
+/* 초기 UI 상태 */
+$("#btn-tts").classList.toggle("on",ttsOn);
+$("#btn-txt").classList.toggle("on",txtOn);
+if(!txtOn)chatEl.classList.add("no-text");
 
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
