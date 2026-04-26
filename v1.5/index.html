@@ -166,6 +166,18 @@ footer{padding:6px 10px max(env(safe-area-inset-bottom),8px);background:var(--su
 .crisis-card .ph .num{font-size:18px;letter-spacing:1px}
 .crisis-card .note{color:var(--muted);font-size:12px;margin-top:10px;line-height:1.6}
 
+/* === BREATH COUNTDOWN (요기 호흡 카운트) === */
+.breath-block{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:14px 22px;margin:8px 0;background:var(--yogi-bg);border:1.5px solid var(--yogi-accent);border-radius:14px;min-width:180px}
+.breath-label{font-size:13px;color:var(--yogi-accent);font-weight:600;letter-spacing:1px}
+.breath-count{font-size:32px;font-weight:700;color:var(--yogi-fg);font-family:ui-monospace,monospace;line-height:1.1;transition:transform .25s ease}
+.breath-count.tick{transform:scale(1.15)}
+.breath-bar{width:140px;height:4px;background:rgba(0,0,0,.2);border-radius:2px;overflow:hidden}
+.breath-bar-fill{height:100%;background:var(--yogi-accent);width:0;transition:width 1s linear}
+.breath-block.in .breath-label::before{content:"⬇  "}
+.breath-block.out .breath-label::before{content:"⬆  "}
+.breath-block.done{opacity:.55}
+.breath-block.done .breath-bar-fill{background:var(--sumi-accent)}
+
 /* === DISCLAIMER === */
 .disc-card{max-width:440px}
 .disc-card h2{color:var(--sumi-accent);font-size:16px}
@@ -373,6 +385,19 @@ ${profileSection}
   · 깊은 이완: 흡 4초 / 호 8초
   · 급성 불안: Cyclic sighing (이중 흡 + 긴 호) — Balban 2023
   · ❌ 금지: 4-7-8, Box breathing (Kumbhaka 포함, 심혈관 위험)
+- **호흡 카운트 출력 형식 (반드시 마커 사용)**:
+  · 들이마실 때: \`[BREATH:in:4]\` (4초)
+  · 내쉴 때: \`[BREATH:out:6]\` (6초)
+  · 마커는 1줄에 하나, 마커 위에 "들이마셔요"/"내쉬어요" 안내 한 줄 OK
+  · 마커 사이는 빈 줄 1개로 분리
+  · 클라이언트가 자동으로 카운트다운 애니메이션으로 표시 (1초 간격, 진행 바 포함)
+  · 절대 "하나, 둘, 셋, 넷"을 한 줄에 쓰지 말 것 — 호흡 타이밍 불일치
+  · 예시:
+    들이마셔요
+    [BREATH:in:4]
+
+    천천히 내쉬어요
+    [BREATH:out:6]
 - 동작: 한 세션 3~5분, 한 동작 30~60초. 동작 후 "어땠어요?" 필수
 - 카메라 없음 — 마이크로 모빌리티만 (목·어깨·흉추·발목·의자 신장·발바닥 그라운딩)
 - 금지: 역위, 균형 자세, 강한 후굴, 자세 교정 지시
@@ -509,16 +534,54 @@ function addAssistant(text){
     blocks.forEach(b=>turn.innerHTML+=mkBubble(b.who,b.label,fixFace(b.who,b.text)));
   }
   chatEl.appendChild(turn);chatEl.scrollTop=chatEl.scrollHeight;
+  startBreathAnimations();
 }
 
 const CHAR_AV={momi:"(◉◡◉)",maeum:"【⊡◡⊡】",yogi:"☯◡☯",sumi:"•ᵕ•"};
 function mkBubble(who,label,text){
   const av=CHAR_AV[who]||CHAR_AV.maeum;
   const cls=who||"maeum";
-  return `<div class="bbl ${cls}"><div class="av">${av}</div><div class="body"><div class="who">${label}</div><div class="txt">${esc(text.trim())}</div></div></div>`;
+  return `<div class="bbl ${cls}"><div class="av">${av}</div><div class="body"><div class="who">${label}</div><div class="txt">${renderTextWithBreath(text.trim())}</div></div></div>`;
 }
 
 function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}
+
+/* === 호흡 카운트 마커 → DOM 변환 === */
+/* LLM이 [BREATH:in:4] / [BREATH:out:6] 출력하면 카운트다운 카드로 변환 */
+function renderTextWithBreath(text){
+  const re=/\[BREATH:(in|out):(\d+)\]/g;
+  let html="",last=0,m;
+  while((m=re.exec(text))!==null){
+    if(m.index>last)html+=esc(text.substring(last,m.index));
+    const dir=m[1],sec=parseInt(m[2],10);
+    const label=dir==="in"?"들이마셔요":"내쉬어요";
+    html+=`<div class="breath-block ${dir}" data-dir="${dir}" data-sec="${sec}"><div class="breath-label">${label} · ${sec}초</div><div class="breath-count">0</div><div class="breath-bar"><div class="breath-bar-fill"></div></div></div>`;
+    last=m.index+m[0].length;
+  }
+  if(last<text.length)html+=esc(text.substring(last));
+  return html;
+}
+
+/* 카운트다운 애니메이션 시작 — addAssistant 후 호출 */
+function startBreathAnimations(){
+  document.querySelectorAll('.breath-block:not(.started)').forEach(el=>{
+    el.classList.add('started');
+    const sec=parseInt(el.dataset.sec,10)||4;
+    const countEl=el.querySelector('.breath-count');
+    const barEl=el.querySelector('.breath-bar-fill');
+    let i=0;
+    const tick=()=>{
+      i++;
+      countEl.textContent=i;
+      countEl.classList.add('tick');
+      setTimeout(()=>countEl.classList.remove('tick'),250);
+      barEl.style.width=((i/sec)*100)+"%";
+      if(i<sec)setTimeout(tick,1000);
+      else el.classList.add('done');
+    };
+    setTimeout(tick,400);
+  });
+}
 
 function fixFace(who,text){
   // 마음=네모 / 모미=동그라미 / 요기=음양 / 숨이=둥근볼 — 혼동 방지
@@ -774,9 +837,12 @@ speechSynthesis.onvoiceschanged=pickVoices;
 pickVoices();
 
 function cleanForTTS(text){
-  return text.replace(/🫂|🎭|🌿/g,"").replace(/모미:|마음:/g,"")
+  return text.replace(/🫂|🎭|🧘|🌙|🌿/g,"").replace(/모미:|마음:|요기:|숨이:/g,"")
     .replace(/\(◉[^)]*◉\)[ノb]?/g,"").replace(/\(◕[^)]*◕\)/g,"")
-    .replace(/【⊡[^】]*⊡】[ノb]?/g,"").replace(/\[\[PROFILE:[^\]]*\]\]/g,"").trim();
+    .replace(/【⊡[^】]*⊡】[ノb]?/g,"")
+    .replace(/☯[^☯]*☯/g,"").replace(/\(｡[^｡]*｡\)/g,"")
+    .replace(/\[BREATH:(in|out):\d+\]/g,"")
+    .replace(/\[\[PROFILE:[^\]]*\]\]/g,"").trim();
 }
 
 function speakOne(text,who){
