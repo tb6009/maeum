@@ -9,11 +9,11 @@
 <meta name="apple-mobile-web-app-title" content="보살피고">
 <meta name="theme-color" content="#0a0a10">
 <meta name="robots" content="noindex, nofollow">
-<!-- v1.5β: Phase 5 전문가 자문 통과 전 비공개 베타. 검색엔진 색인 차단. -->
+<!-- v1.54β: Hybrid Routing (Haiku 메인 + Sonnet escalation) + Prompt Caching. Phase 5 자문 전 비공개. -->
 
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
-<title>보살피고 v1.5 — 마음·모미·요기·숨이</title>
+<title>보살피고 v1.54β — Hybrid Routing</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
 :root{
@@ -47,6 +47,9 @@ header{padding:max(env(safe-area-inset-top),8px) 14px 6px;background:var(--surfa
 .brand .sum{color:var(--sum);font-size:10px;opacity:.7;cursor:pointer;margin-left:4px}
 .hdr-btns{display:flex;gap:6px}
 .hdr-btns button{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;cursor:pointer}
+.model-badge{font-size:9px;color:var(--muted);margin-left:4px;padding:1px 6px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);font-family:ui-monospace,monospace}
+.model-badge.haiku{color:#5cc8c0;border-color:#1a3538}
+.model-badge.sonnet{color:#f5c518;border-color:#3d3318}
 .ver{font-size:9px;color:var(--muted);margin-left:6px}
 
 /* === CHAT === */
@@ -211,7 +214,8 @@ footer{padding:6px 10px max(env(safe-area-inset-bottom),8px);background:var(--su
     <span class="av" style="background:var(--yogi-avatar);color:var(--yogi-accent);width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-family:ui-monospace,monospace">☯◡☯</span>요기
     <span style="color:var(--muted)">·</span>
     <span class="av" style="background:var(--sumi-avatar);color:var(--sumi-accent);width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-family:ui-monospace,monospace">•ᵕ•</span>숨이
-    <span class="ver">v1.5β</span>
+    <span class="ver">v1.54β</span>
+    <span id="model-badge" class="model-badge" title="현재 응답 모델"></span>
   </div>
   <div class="hdr-btns">
     <div class="voice-bar"><button id="btn-tts" title="음성 출력">🔊</button><button id="btn-txt" class="on" title="텍스트 표시">📝</button></div>
@@ -243,10 +247,11 @@ footer{padding:6px 10px max(env(safe-area-inset-bottom),8px);background:var(--su
     <input id="apikey" type="password" placeholder="sk-ant-...">
     <label>모델</label>
     <select id="model">
-      <option value="claude-sonnet-4-6" selected>Sonnet 4.6 (기본)</option>
-      <option value="claude-opus-4-7">Opus 4.7 (가장 똑똑)</option>
-      <option value="claude-opus-4-6">Opus 4.6</option>
-      <option value="claude-haiku-4-5-20251001">Haiku 4.5 (빠름)</option>
+      <option value="auto" selected>🔄 자동 (Hybrid Routing — 권장)</option>
+      <option value="claude-haiku-4-5-20251001">🌀 Haiku 4.5 강제 (빠름·저렴)</option>
+      <option value="claude-sonnet-4-6">⚙️ Sonnet 4.6 강제 (균형)</option>
+      <option value="claude-opus-4-7">🧠 Opus 4.7 강제 (가장 똑똑·비쌈)</option>
+      <option value="claude-opus-4-6">🧠 Opus 4.6 강제</option>
     </select>
     <label>max_tokens</label>
     <input id="maxtok" type="number" value="2000" min="256" max="8192">
@@ -317,7 +322,65 @@ footer{padding:6px 10px max(env(safe-area-inset-bottom),8px);background:var(--su
    ⚠️ Phase 5 전문가 자문 통과 전 베타. 비공개 운영.
    ========================================== */
 
-const VERSION = "1.5β";
+const VERSION = "1.54β";
+
+/* === Hybrid Routing (v1.54 신규) ===
+   - Haiku 4.5 메인 응답
+   - 위기·트라우마·깊은 정서·측정 도구 진행 중 → Sonnet 4.6 escalation
+   - Sonnet은 prompt caching 적용 (Haiku는 prefix 미달로 미적용)
+   - 각 라우팅 결정을 localStorage에 로깅 → 사용자 종단 상태 추적
+*/
+const MODEL_HAIKU = "claude-haiku-4-5-20251001";
+const MODEL_SONNET = "claude-sonnet-4-6";
+
+const DEEP_EMOTION_KW = ["우울","무겁","외로","공허","의미가 없","의미없","힘들어","지쳤","번아웃","화병","가슴 답답","속이 탐","한이 쌓"];
+const TRAUMA_KW = ["그때가 다시","멍해","해리","플래시백","악몽","트라우마","과호흡","공황","숨이 가빠"];
+
+function selectModel(userMessage) {
+  // 1. 위기 키워드 → 즉시 Sonnet (이미 detectCrisis 함수가 별도 모달도 띄움)
+  if (detectCrisis(userMessage)) return { model: MODEL_SONNET, reason: "crisis" };
+  // 2. 트라우마 단서 → Sonnet
+  if (TRAUMA_KW.some(k => userMessage.includes(k))) return { model: MODEL_SONNET, reason: "trauma_signal" };
+  // 3. 깊은 정서 키워드 → Sonnet
+  if (DEEP_EMOTION_KW.some(k => userMessage.includes(k))) return { model: MODEL_SONNET, reason: "deep_emotion" };
+  // 4. 측정 도구 진행 중 (PHQ/PSS/PC-PTSD 등 척도 기록 신호)
+  try {
+    const scales = JSON.parse(localStorage.getItem(LS.SCALES) || "{}");
+    if (Object.keys(scales).length > 0) {
+      const lastDate = Object.values(scales).flat().map(e => e.date).sort().pop();
+      if (lastDate && (Date.now() - new Date(lastDate).getTime()) < 7*24*60*60*1000) {
+        // 1주일 내 측정 기록 있음 → 측정 컨텍스트 진행 중 가능성
+        if (userMessage.length > 20) return { model: MODEL_SONNET, reason: "measurement" };
+      }
+    }
+  } catch {}
+  // 5. 매우 짧은 발화는 Haiku로 충분
+  // 6. 그 외 일상 → Haiku
+  return { model: MODEL_HAIKU, reason: "daily" };
+}
+
+function logRoutingDecision(reason, model) {
+  try {
+    const log = JSON.parse(localStorage.getItem(LS.ROUTING) || "[]");
+    log.push({ date: new Date().toISOString(), reason, model: model.includes("haiku") ? "haiku" : "sonnet" });
+    localStorage.setItem(LS.ROUTING, JSON.stringify(log.slice(-200)));
+  } catch {}
+}
+
+function updateModelBadge(model) {
+  const el = document.getElementById("model-badge");
+  if (!el) return;
+  if (model.includes("haiku")) {
+    el.textContent = "🌀 Haiku";
+    el.className = "model-badge haiku";
+  } else if (model.includes("sonnet")) {
+    el.textContent = "⚙️ Sonnet";
+    el.className = "model-badge sonnet";
+  } else {
+    el.textContent = "🧠 Opus";
+    el.className = "model-badge";
+  }
+}
 
 /* === 위기 키워드 감지 (코드 레벨 안전망 — 시스템 프롬프트와 이중) === */
 const CRISIS_KEYWORDS = [
@@ -521,7 +584,7 @@ ${profileSection}
 }
 
 /* === STATE === */
-const LS={KEY:"m.key",MODEL:"m.model",MAX:"m.max",HIST:"m.hist",PROXY:"m.proxy",PROFILE:"m.prof",DAILY:"m.daily",SCALES:"m.scales.history",RECENT:"m.recent_summary",DISC:"m.disclaimer.consented"};
+const LS={KEY:"m.key",MODEL:"m.model",MAX:"m.max",HIST:"m.hist",PROXY:"m.proxy",PROFILE:"m.prof",DAILY:"m.daily",SCALES:"m.scales.history",RECENT:"m.recent_summary",DISC:"m.disclaimer.consented",ROUTING:"m.routing.log"};
 const $=s=>document.querySelector(s);
 const chatEl=$("#chat"),inp=$("#input"),sendBtn=$("#send");
 let history=[], profile={name:"",city:"",time_structure:"",body_season:"",mind_theme:""};
@@ -662,7 +725,30 @@ async function callAPI(userText,opts={}){
     const ep=proxy?(proxy+"/v1/messages"):"https://api.anthropic.com/v1/messages";
     const hdrs={"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01"};
     if(!proxy)hdrs["anthropic-dangerous-direct-browser-access"]="true";
-    const res=await fetch(ep,{method:"POST",headers:hdrs,body:JSON.stringify({model:localStorage.getItem(LS.MODEL)||"claude-sonnet-4-6",max_tokens:parseInt(localStorage.getItem(LS.MAX)||"2000"),system:buildPrompt(profile),messages:history.map(m=>({role:m.role,content:m.content}))})});
+    /* === v1.54 Hybrid Routing === */
+    const userOverride = localStorage.getItem(LS.MODEL);
+    let model, reason;
+    if (userOverride && userOverride !== "auto") {
+      model = userOverride; reason = "user_override";
+    } else {
+      const decision = selectModel(userText || "");
+      model = decision.model; reason = decision.reason;
+    }
+    logRoutingDecision(reason, model);
+    updateModelBadge(model);
+    /* === Prompt Caching: Sonnet/Opus만 적용 (Haiku는 prefix < 4096 미달) === */
+    const sysText = buildPrompt(profile);
+    const isCacheable = !model.includes("haiku");
+    const systemField = isCacheable
+      ? [{ type: "text", text: sysText, cache_control: { type: "ephemeral" } }]
+      : sysText;
+    const reqBody = {
+      model,
+      max_tokens: parseInt(localStorage.getItem(LS.MAX) || "2000"),
+      system: systemField,
+      messages: history.map(m => ({ role: m.role, content: m.content }))
+    };
+    const res=await fetch(ep,{method:"POST",headers:hdrs,body:JSON.stringify(reqBody)});
     if(!res.ok)throw new Error("HTTP "+res.status+": "+(await res.text()));
     const data=await res.json();
     let text=(data.content||[]).map(b=>b.text||"").join("").trim()||"【⊡ _ ⊡】 응답이 비었어요.";
@@ -670,6 +756,8 @@ async function callAPI(userText,opts={}){
     removeTyping();addAssistant(text);speakResponse(text);
     history.push({role:"assistant",content:text});
     localStorage.setItem(LS.HIST,JSON.stringify(history));
+    /* 캐시 사용량 콘솔 로그 (디버그용) */
+    if (data.usage) console.log(`[v1.54] model=${model} reason=${reason} input=${data.usage.input_tokens} cache_read=${data.usage.cache_read_input_tokens||0} cache_write=${data.usage.cache_creation_input_tokens||0} output=${data.usage.output_tokens}`);
   }catch(e){removeTyping();addAssistant("【⊡ _ ⊡】 삐끗했어요.\n\n"+e.message)}
   finally{sendBtn.disabled=false;chatEl.scrollTop=chatEl.scrollHeight}
 }
@@ -756,7 +844,7 @@ $("#btn-export").onclick=()=>{
 };
 
 /* Settings */
-function openSettings(msg){$("#err").textContent=msg||"";$("#apikey").value=localStorage.getItem(LS.KEY)||"";$("#proxy").value=localStorage.getItem(LS.PROXY)||"";$("#model").value=localStorage.getItem(LS.MODEL)||"claude-sonnet-4-6";$("#maxtok").value=localStorage.getItem(LS.MAX)||"2000";$("#st-name").value=profile.name;$("#st-city").value=profile.city;$("#modal").classList.add("on")}
+function openSettings(msg){$("#err").textContent=msg||"";$("#apikey").value=localStorage.getItem(LS.KEY)||"";$("#proxy").value=localStorage.getItem(LS.PROXY)||"";$("#model").value=localStorage.getItem(LS.MODEL)||"auto";$("#maxtok").value=localStorage.getItem(LS.MAX)||"2000";$("#st-name").value=profile.name;$("#st-city").value=profile.city;$("#modal").classList.add("on")}
 $("#btn-set").onclick=()=>openSettings();
 $("#btn-save").onclick=()=>{
   const k=$("#apikey").value.trim();if(!k.startsWith("sk-")){$("#err").textContent="sk-ant-... 형식이어야 해요.";return}

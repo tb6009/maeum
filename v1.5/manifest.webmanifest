@@ -1,5 +1,5 @@
 {
-  "name": "보살피고 — 보고, 살피다",
+  "name": "보살피고 v1.54β — 비용 최적화",
   "short_name": "보살피고",
   "start_url": "./index.html",
   "scope": "./",
@@ -7,7 +7,7 @@
   "orientation": "portrait",
   "background_color": "#0a0a10",
   "theme_color": "#0a0a10",
-  "description": "보고, 살피다 — 몸·마음·움직임·안정화 4 캐릭터의 대화",
+  "description": "보고, 살피다 — 4 캐릭터 + Hybrid Routing (Haiku 메인 / Sonnet escalation) + Caching",
   "icons": [
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
