@@ -219,6 +219,7 @@ footer{padding:6px 10px max(env(safe-area-inset-bottom),8px);background:var(--su
   </div>
   <div class="hdr-btns">
     <div class="voice-bar"><button id="btn-tts" title="음성 출력">🔊</button><button id="btn-txt" class="on" title="텍스트 표시">📝</button></div>
+    <button id="btn-usage" title="사용량 대시보드" onclick="window.open('./usage.html','_blank')">📊</button>
     <button id="btn-export" title="대화 내보내기">💾</button>
     <button id="btn-clr" title="초기화">🧹</button>
     <button id="btn-set" title="설정">⚙️</button>
@@ -584,7 +585,41 @@ ${profileSection}
 }
 
 /* === STATE === */
-const LS={KEY:"m.key",MODEL:"m.model",MAX:"m.max",HIST:"m.hist",PROXY:"m.proxy",PROFILE:"m.prof",DAILY:"m.daily",SCALES:"m.scales.history",RECENT:"m.recent_summary",DISC:"m.disclaimer.consented",ROUTING:"m.routing.log"};
+const LS={KEY:"m.key",MODEL:"m.model",MAX:"m.max",HIST:"m.hist",PROXY:"m.proxy",PROFILE:"m.prof",DAILY:"m.daily",SCALES:"m.scales.history",RECENT:"m.recent_summary",DISC:"m.disclaimer.consented",ROUTING:"m.routing.log",USAGE:"m.usage.log"};
+
+/* === Pricing (USD per 1M tokens) — 모니터링 대시보드용 === */
+const PRICING = {
+  "claude-haiku-4-5-20251001": { in: 1.00, out: 5.00, cr: 0.10, cw: 1.25 },
+  "claude-sonnet-4-6":          { in: 3.00, out: 15.00, cr: 0.30, cw: 3.75 },
+  "claude-opus-4-7":             { in: 5.00, out: 25.00, cr: 0.50, cw: 6.25 },
+  "claude-opus-4-6":             { in: 5.00, out: 25.00, cr: 0.50, cw: 6.25 }
+};
+
+function calcCost(model, usage) {
+  const p = PRICING[model] || PRICING["claude-sonnet-4-6"];
+  return ((usage.input_tokens || 0) * p.in
+        + (usage.output_tokens || 0) * p.out
+        + (usage.cache_read_input_tokens || 0) * p.cr
+        + (usage.cache_creation_input_tokens || 0) * p.cw) / 1e6;
+}
+
+function logUsage(model, reason, usage) {
+  try {
+    const log = JSON.parse(localStorage.getItem(LS.USAGE) || "[]");
+    log.push({
+      date: new Date().toISOString(),
+      model: model.includes("haiku") ? "haiku" : (model.includes("opus") ? "opus" : "sonnet"),
+      model_id: model,
+      reason,
+      input: usage.input_tokens || 0,
+      output: usage.output_tokens || 0,
+      cache_read: usage.cache_read_input_tokens || 0,
+      cache_write: usage.cache_creation_input_tokens || 0,
+      cost: calcCost(model, usage)
+    });
+    localStorage.setItem(LS.USAGE, JSON.stringify(log.slice(-1000)));
+  } catch (e) { console.warn("logUsage failed:", e); }
+}
 const $=s=>document.querySelector(s);
 const chatEl=$("#chat"),inp=$("#input"),sendBtn=$("#send");
 let history=[], profile={name:"",city:"",time_structure:"",body_season:"",mind_theme:""};
@@ -756,8 +791,11 @@ async function callAPI(userText,opts={}){
     removeTyping();addAssistant(text);speakResponse(text);
     history.push({role:"assistant",content:text});
     localStorage.setItem(LS.HIST,JSON.stringify(history));
-    /* 캐시 사용량 콘솔 로그 (디버그용) */
-    if (data.usage) console.log(`[v1.54] model=${model} reason=${reason} input=${data.usage.input_tokens} cache_read=${data.usage.cache_read_input_tokens||0} cache_write=${data.usage.cache_creation_input_tokens||0} output=${data.usage.output_tokens}`);
+    /* 캐시 사용량 콘솔 로그 + 대시보드용 누적 저장 */
+    if (data.usage) {
+      console.log(`[v1.54] model=${model} reason=${reason} input=${data.usage.input_tokens} cache_read=${data.usage.cache_read_input_tokens||0} cache_write=${data.usage.cache_creation_input_tokens||0} output=${data.usage.output_tokens} cost=$${calcCost(model, data.usage).toFixed(5)}`);
+      logUsage(model, reason, data.usage);
+    }
   }catch(e){removeTyping();addAssistant("【⊡ _ ⊡】 삐끗했어요.\n\n"+e.message)}
   finally{sendBtn.disabled=false;chatEl.scrollTop=chatEl.scrollHeight}
 }
