@@ -267,9 +267,9 @@ footer{padding:6px 10px max(env(safe-area-inset-bottom),8px);background:var(--su
     <label>모델</label>
     <select id="model-select">
       <option value="auto" selected>🔄 자동 (Hybrid Routing — 권장)</option>
-      <option value="claude-3-5-haiku-20241022">🌀 Haiku 4.5 강제</option>
-      <option value="claude-3-5-sonnet-20241022">⚙️ Sonnet 4.6 강제</option>
-      <option value="claude-3-opus-20240229">🧠 Opus 3 강제 (가장 똑똑·비쌈)</option>
+      <option value="claude-haiku-4-5-20251001">🌀 Haiku 4.5 강제</option>
+      <option value="claude-sonnet-4-6">⚙️ Sonnet 4.6 강제</option>
+      <option value="claude-opus-4-6">🧠 Opus 4.6 강제 (가장 똑똑·비쌈)</option>
     </select>
     <label>max_tokens</label>
     <input id="maxtok" type="number" value="2000" min="256" max="8192">
@@ -350,8 +350,8 @@ footer{padding:6px 10px max(env(safe-area-inset-bottom),8px);background:var(--su
 /* ============================================================
    모델 상수
    ============================================================ */
-const MODEL_HAIKU = "claude-3-5-haiku-20241022";
-const MODEL_SONNET = "claude-3-5-sonnet-20241022";
+const MODEL_HAIKU = "claude-haiku-4-5-20251001";
+const MODEL_SONNET = "claude-sonnet-4-6";
 
 /* ============================================================
    위기 키워드 (전 버전 공통 — 변경 금지)
@@ -916,13 +916,13 @@ function selectModel(userMessage, mode) {
    Pricing & Usage Logging
    ============================================================ */
 const PRICING = {
-  "claude-3-5-haiku-20241022": { in: 1.00, out: 5.00, cr: 0.10, cw: 1.25 },
-  "claude-3-5-sonnet-20241022":          { in: 3.00, out: 15.00, cr: 0.30, cw: 3.75 },
-  "claude-3-opus-20240229":     { in: 15.00, out: 75.00, cr: 1.50, cw: 18.75 }
+  "claude-haiku-4-5-20251001": { in: 1.00, out: 5.00, cr: 0.10, cw: 1.25 },
+  "claude-sonnet-4-6":          { in: 3.00, out: 15.00, cr: 0.30, cw: 3.75 },
+  "claude-opus-4-6":             { in: 5.00, out: 25.00, cr: 0.50, cw: 6.25 }
 };
 
 function calcCost(model, usage) {
-  const p = PRICING[model] || PRICING["claude-3-5-sonnet-20241022"];
+  const p = PRICING[model] || PRICING["claude-sonnet-4-6"];
   return ((usage.input_tokens || 0) * p.in
         + (usage.output_tokens || 0) * p.out
         + (usage.cache_read_input_tokens || 0) * p.cr
@@ -1496,9 +1496,9 @@ const DIAGNOSE_MODELS = [
   "claude-haiku-4-5-20251001",
   "claude-haiku-4-5",
   "claude-3-7-sonnet-20250219",
-  "claude-3-5-sonnet-20241022",
-  "claude-3-5-haiku-20241022",
-  "claude-3-opus-20240229"
+  "claude-sonnet-4-6",
+  "claude-haiku-4-5-20251001",
+  "claude-opus-4-6"
 ];
 
 async function diagnoseModels() {
