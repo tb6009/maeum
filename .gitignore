@@ -16,3 +16,6 @@ Thumbs.db
 **/secrets.*
 **/apikey*
 **/*.key
+
+# 구버전 격리 폴더 (로컬 보존, 배포·푸시 제외)
+_backup/

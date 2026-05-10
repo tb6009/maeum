@@ -1,4 +1,4 @@
-const CACHE = "maeum-v4";
+const CACHE = "bosalpigo-v154-1";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (e) => {
@@ -18,7 +18,7 @@ self.addEventListener("fetch", (e) => {
       url.hostname.includes("workers.dev") ||
       url.hostname.includes("open-meteo.com")) return;
 
-  // HTML·JS·CSS는 네트워크 우선 (최신 버전 보장), 실패 시 캐시
+  // HTML·JS·CSS는 네트워크 우선 (최신 보장), 실패 시 캐시
   if (url.origin === location.origin) {
     e.respondWith(
       fetch(e.request).then(resp => {
