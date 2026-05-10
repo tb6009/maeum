@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>📊 보살피고 v1.54β — 사용량 대시보드</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif; }
+  .stat-card { transition: transform .15s; }
+  .stat-card:hover { transform: translateY(-1px); }
+  .pulse-empty { animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.55; } }
+</style>
+</head>
+<body class="bg-neutral-950 text-neutral-100 min-h-screen">
+
+<header class="border-b border-neutral-800 bg-neutral-900">
+  <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div>
+      <h1 class="text-lg font-semibold tracking-tight">📊 사용량 대시보드</h1>
+      <p class="text-xs text-neutral-500 mt-0.5">보살피고 v1.54β — 이 브라우저 로컬 데이터 (서버 X)</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="./index.html" class="text-xs text-neutral-400 hover:text-neutral-200">← 챗봇으로</a>
+      <button id="reset-btn" class="text-xs text-red-400 hover:text-red-300 border border-red-900 rounded px-2 py-1">기록 초기화</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-6 py-8 space-y-8">
+
+  <!-- 빈 상태 -->
+  <section id="empty-state" class="hidden text-center py-20 pulse-empty">
+    <div class="text-6xl mb-4">📭</div>
+    <p class="text-neutral-400">아직 사용 기록이 없어요.</p>
+    <p class="text-xs text-neutral-600 mt-2">챗봇과 대화를 시작하면 여기에 비용·모델 사용량이 누적됩니다.</p>
+  </section>
+
+  <!-- 본문 -->
+  <div id="dashboard" class="hidden">
+
+    <!-- 큰 숫자 카드 4개 -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="stat-card p-5 rounded-xl bg-neutral-900 border border-neutral-800">
+        <div class="text-xs text-neutral-500 mb-1">오늘</div>
+        <div class="text-2xl font-bold"><span id="today-count">0</span><span class="text-sm font-normal text-neutral-500"> 응답</span></div>
+        <div class="text-sm text-emerald-400 mt-1">$<span id="today-cost">0</span></div>
+      </div>
+      <div class="stat-card p-5 rounded-xl bg-neutral-900 border border-neutral-800">
+        <div class="text-xs text-neutral-500 mb-1">이번 주 (7일)</div>
+        <div class="text-2xl font-bold"><span id="week-count">0</span><span class="text-sm font-normal text-neutral-500"> 응답</span></div>
+        <div class="text-sm text-emerald-400 mt-1">$<span id="week-cost">0</span></div>
+      </div>
+      <div class="stat-card p-5 rounded-xl bg-neutral-900 border border-neutral-800">
+        <div class="text-xs text-neutral-500 mb-1">이번 달 (30일)</div>
+        <div class="text-2xl font-bold"><span id="month-count">0</span><span class="text-sm font-normal text-neutral-500"> 응답</span></div>
+        <div class="text-sm text-emerald-400 mt-1">$<span id="month-cost">0</span></div>
+      </div>
+      <div class="stat-card p-5 rounded-xl bg-neutral-900 border border-neutral-800">
+        <div class="text-xs text-neutral-500 mb-1">전체 (1000건 보관)</div>
+        <div class="text-2xl font-bold"><span id="total-count">0</span><span class="text-sm font-normal text-neutral-500"> 응답</span></div>
+        <div class="text-sm text-emerald-400 mt-1">$<span id="total-cost">0</span></div>
+      </div>
+    </section>
+
+    <!-- 절감 효과 카드 -->
+    <section class="mt-6 p-5 rounded-xl bg-gradient-to-br from-emerald-900/40 to-neutral-900 border border-emerald-900/50">
+      <h2 class="text-sm font-medium text-emerald-300 mb-3">💰 v1.5 (Sonnet only) 대비 절감</h2>
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <div class="text-xs text-neutral-500">v1.5 가정 비용</div>
+          <div class="text-lg font-semibold text-neutral-300">$<span id="hypothetical-cost">0</span></div>
+        </div>
+        <div>
+          <div class="text-xs text-neutral-500">v1.54 실제 비용</div>
+          <div class="text-lg font-semibold text-emerald-400">$<span id="actual-cost">0</span></div>
+        </div>
+        <div>
+          <div class="text-xs text-neutral-500">절감액 / 절감율</div>
+          <div class="text-lg font-semibold text-emerald-300">$<span id="saved-cost">0</span> <span class="text-sm">(<span id="saved-pct">0</span>%)</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 차트 4개 -->
+    <section class="mt-8 grid md:grid-cols-2 gap-6">
+      <div class="p-5 rounded-xl bg-neutral-900 border border-neutral-800">
+        <h3 class="text-sm font-medium text-neutral-300 mb-3">모델 사용 비율</h3>
+        <div class="relative" style="height:240px"><canvas id="model-chart"></canvas></div>
+      </div>
+      <div class="p-5 rounded-xl bg-neutral-900 border border-neutral-800">
+        <h3 class="text-sm font-medium text-neutral-300 mb-3">라우팅 사유 (Sonnet 트리거 분석)</h3>
+        <div class="relative" style="height:240px"><canvas id="reason-chart"></canvas></div>
+      </div>
+      <div class="p-5 rounded-xl bg-neutral-900 border border-neutral-800 md:col-span-2">
+        <h3 class="text-sm font-medium text-neutral-300 mb-3">일별 비용·응답 수 (지난 30일)</h3>
+        <div class="relative" style="height:280px"><canvas id="daily-chart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- 무거움 지수 -->
+    <section class="mt-6 p-5 rounded-xl bg-neutral-900 border border-neutral-800">
+      <h2 class="text-sm font-medium text-amber-300 mb-2">🌙 무거움 지수 (Sonnet 호출 비율)</h2>
+      <p class="text-xs text-neutral-500 mb-3">무거운 영역에 자주 진입할수록 Sonnet 호출이 증가합니다. 자기 점검 보조 지표로만 참고하세요 — 진단 X.</p>
+      <div class="flex items-center gap-4">
+        <div class="flex-1">
+          <div class="h-3 bg-neutral-800 rounded-full overflow-hidden">
+            <div id="heavy-bar" class="h-full transition-all duration-700" style="width:0%"></div>
+          </div>
+          <div class="flex justify-between text-[10px] text-neutral-600 mt-1">
+            <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-2xl font-bold" id="heavy-pct">0%</div>
+          <div class="text-xs text-neutral-500" id="heavy-label">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 캐시 효율 -->
+    <section class="mt-6 p-5 rounded-xl bg-neutral-900 border border-neutral-800">
+      <h2 class="text-sm font-medium text-indigo-300 mb-3">⚡ Prompt Caching 효율 (Sonnet 한정)</h2>
+      <div class="grid grid-cols-3 gap-4 text-center">
+        <div>
+          <div class="text-xs text-neutral-500">Sonnet 응답</div>
+          <div class="text-xl font-semibold" id="sonnet-count">0</div>
+        </div>
+        <div>
+          <div class="text-xs text-neutral-500">캐시 히트율</div>
+          <div class="text-xl font-semibold text-indigo-400" id="cache-hit-rate">0%</div>
+        </div>
+        <div>
+          <div class="text-xs text-neutral-500">캐시로 절감</div>
+          <div class="text-xl font-semibold text-emerald-400">$<span id="cache-saved">0</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 최근 로그 -->
+    <section class="mt-8 p-5 rounded-xl bg-neutral-900 border border-neutral-800">
+      <h2 class="text-sm font-medium text-neutral-300 mb-3">최근 응답 로그 (최근 20건)</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="text-neutral-500 border-b border-neutral-800">
+            <tr>
+              <th class="text-left py-2 pr-2">시각</th>
+              <th class="text-left py-2 pr-2">모델</th>
+              <th class="text-left py-2 pr-2">사유</th>
+              <th class="text-right py-2 pr-2">in</th>
+              <th class="text-right py-2 pr-2">cache·R</th>
+              <th class="text-right py-2 pr-2">cache·W</th>
+              <th class="text-right py-2 pr-2">out</th>
+              <th class="text-right py-2">$</th>
+            </tr>
+          </thead>
+          <tbody id="log-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="text-[10px] text-neutral-600 text-center mt-8">
+      ⚠️ 비용 계산은 공개 가격표(2026-04 기준) × 토큰 사용량입니다. 실제 청구액은 Anthropic Console에서 확인하세요.
+    </p>
+  </div>
+</main>
+
+<script>
+const PRICING = {
+  "claude-haiku-4-5-20251001": { in: 1.00, out: 5.00, cr: 0.10, cw: 1.25 },
+  "claude-sonnet-4-6":          { in: 3.00, out: 15.00, cr: 0.30, cw: 3.75 },
+  "claude-opus-4-7":             { in: 5.00, out: 25.00, cr: 0.50, cw: 6.25 },
+  "claude-opus-4-6":             { in: 5.00, out: 25.00, cr: 0.50, cw: 6.25 }
+};
+const SONNET_PRICE = PRICING["claude-sonnet-4-6"];
+
+function load() {
+  try { return JSON.parse(localStorage.getItem("m.usage.log") || "[]"); }
+  catch { return []; }
+}
+
+function fmt(n, d=4) { return n.toFixed(d); }
+function fmtShort(n) { return n >= 1 ? n.toFixed(2) : n.toFixed(4); }
+
+function reasonLabel(r) {
+  return ({
+    daily: "일상", crisis: "위기", trauma_signal: "트라우마 단서",
+    deep_emotion: "깊은 정서", measurement: "측정 진행", user_override: "수동 선택"
+  })[r] || r;
+}
+
+function reasonColor(r) {
+  return ({
+    daily: "#5cc8c0", crisis: "#ff6b6b", trauma_signal: "#a78bfa",
+    deep_emotion: "#f59e0b", measurement: "#6366f1", user_override: "#6b7280"
+  })[r] || "#6b7280";
+}
+
+function modelColor(m) {
+  return ({ haiku: "#5cc8c0", sonnet: "#f5c518", opus: "#a78bfa" })[m] || "#6b7280";
+}
+
+function dayKey(iso) { return iso.slice(0, 10); }
+
+function render() {
+  const log = load();
+
+  if (log.length === 0) {
+    document.getElementById("empty-state").classList.remove("hidden");
+    document.getElementById("dashboard").classList.add("hidden");
+    return;
+  }
+  document.getElementById("empty-state").classList.add("hidden");
+  document.getElementById("dashboard").classList.remove("hidden");
+
+  const now = Date.now();
+  const today = new Date().toISOString().slice(0, 10);
+  const week7 = now - 7 * 86400000;
+  const days30 = now - 30 * 86400000;
+
+  const todayLog = log.filter(e => e.date.startsWith(today));
+  const weekLog = log.filter(e => new Date(e.date).getTime() >= week7);
+  const monthLog = log.filter(e => new Date(e.date).getTime() >= days30);
+
+  // 큰 숫자 카드
+  document.getElementById("today-count").textContent = todayLog.length;
+  document.getElementById("today-cost").textContent = fmtShort(todayLog.reduce((s, e) => s + e.cost, 0));
+  document.getElementById("week-count").textContent = weekLog.length;
+  document.getElementById("week-cost").textContent = fmtShort(weekLog.reduce((s, e) => s + e.cost, 0));
+  document.getElementById("month-count").textContent = monthLog.length;
+  document.getElementById("month-cost").textContent = fmtShort(monthLog.reduce((s, e) => s + e.cost, 0));
+  document.getElementById("total-count").textContent = log.length;
+  document.getElementById("total-cost").textContent = fmtShort(log.reduce((s, e) => s + e.cost, 0));
+
+  // 절감 효과 — 같은 토큰을 v1.5 (Sonnet only, no cache)로 처리했다고 가정
+  const actualCost = log.reduce((s, e) => s + e.cost, 0);
+  const hypothetical = log.reduce((s, e) => {
+    const totalIn = e.input + e.cache_read + e.cache_write;
+    return s + (totalIn * SONNET_PRICE.in + e.output * SONNET_PRICE.out) / 1e6;
+  }, 0);
+  const saved = hypothetical - actualCost;
+  const savedPct = hypothetical > 0 ? Math.round((saved / hypothetical) * 100) : 0;
+  document.getElementById("hypothetical-cost").textContent = fmtShort(hypothetical);
+  document.getElementById("actual-cost").textContent = fmtShort(actualCost);
+  document.getElementById("saved-cost").textContent = fmtShort(saved);
+  document.getElementById("saved-pct").textContent = savedPct;
+
+  // 모델 사용 비율 도넛
+  const byModel = log.reduce((acc, e) => { acc[e.model] = (acc[e.model] || 0) + 1; return acc; }, {});
+  renderDonut("model-chart",
+    Object.keys(byModel),
+    Object.values(byModel),
+    Object.keys(byModel).map(modelColor)
+  );
+
+  // 라우팅 사유 도넛
+  const byReason = log.reduce((acc, e) => { acc[e.reason] = (acc[e.reason] || 0) + 1; return acc; }, {});
+  renderDonut("reason-chart",
+    Object.keys(byReason).map(reasonLabel),
+    Object.values(byReason),
+    Object.keys(byReason).map(reasonColor)
+  );
+
+  // 일별 라인 차트 (지난 30일)
+  const byDay = {};
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now - i * 86400000).toISOString().slice(0, 10);
+    byDay[d] = { cost: 0, count: 0 };
+  }
+  log.forEach(e => {
+    const d = dayKey(e.date);
+    if (byDay[d]) { byDay[d].cost += e.cost; byDay[d].count += 1; }
+  });
+  renderDailyChart(Object.keys(byDay), Object.values(byDay));
+
+  // 무거움 지수
+  const heavyPct = monthLog.length > 0
+    ? Math.round((monthLog.filter(e => e.model !== "haiku").length / monthLog.length) * 100)
+    : 0;
+  document.getElementById("heavy-pct").textContent = heavyPct + "%";
+  let heavyLabel, heavyColor;
+  if (heavyPct < 5) { heavyLabel = "가벼운 시기"; heavyColor = "#5cc8c0"; }
+  else if (heavyPct < 25) { heavyLabel = "일상 + 가끔 깊은 얘기"; heavyColor = "#f5c518"; }
+  else if (heavyPct < 50) { heavyLabel = "무거운 영역 자주"; heavyColor = "#f59e0b"; }
+  else { heavyLabel = "무거운 시기 — 전문가 도움 권장"; heavyColor = "#ff6b6b"; }
+  document.getElementById("heavy-label").textContent = heavyLabel;
+  const bar = document.getElementById("heavy-bar");
+  bar.style.width = heavyPct + "%";
+  bar.style.background = heavyColor;
+
+  // 캐시 효율
+  const sonnetLog = log.filter(e => e.model === "sonnet");
+  const cacheReads = sonnetLog.filter(e => e.cache_read > 0).length;
+  const hitRate = sonnetLog.length > 0 ? Math.round((cacheReads / sonnetLog.length) * 100) : 0;
+  const cacheSaved = sonnetLog.reduce((s, e) => {
+    if (e.cache_read > 0) {
+      // cache_read 토큰을 풀가격으로 처리했다면?
+      return s + e.cache_read * (SONNET_PRICE.in - SONNET_PRICE.cr) / 1e6;
+    }
+    return s;
+  }, 0);
+  document.getElementById("sonnet-count").textContent = sonnetLog.length;
+  document.getElementById("cache-hit-rate").textContent = hitRate + "%";
+  document.getElementById("cache-saved").textContent = fmtShort(cacheSaved);
+
+  // 최근 로그 테이블
+  const tbody = document.getElementById("log-tbody");
+  tbody.innerHTML = log.slice(-20).reverse().map(e => `
+    <tr class="border-b border-neutral-800/50">
+      <td class="py-1.5 pr-2 text-neutral-500">${e.date.slice(5,16).replace("T"," ")}</td>
+      <td class="py-1.5 pr-2"><span class="px-1.5 py-0.5 rounded text-[10px]" style="background:${modelColor(e.model)}33;color:${modelColor(e.model)}">${e.model}</span></td>
+      <td class="py-1.5 pr-2 text-neutral-400">${reasonLabel(e.reason)}</td>
+      <td class="py-1.5 pr-2 text-right text-neutral-300">${e.input.toLocaleString()}</td>
+      <td class="py-1.5 pr-2 text-right ${e.cache_read>0?'text-indigo-400':'text-neutral-700'}">${e.cache_read.toLocaleString()}</td>
+      <td class="py-1.5 pr-2 text-right ${e.cache_write>0?'text-amber-400':'text-neutral-700'}">${e.cache_write.toLocaleString()}</td>
+      <td class="py-1.5 pr-2 text-right text-neutral-300">${e.output.toLocaleString()}</td>
+      <td class="py-1.5 text-right text-emerald-400">$${fmt(e.cost,5)}</td>
+    </tr>
+  `).join("");
+}
+
+let modelChart, reasonChart, dailyChart;
+
+function renderDonut(canvasId, labels, data, colors) {
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  const existing = canvasId === "model-chart" ? modelChart : reasonChart;
+  if (existing) existing.destroy();
+  const chart = new Chart(ctx, {
+    type: "doughnut",
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: "#0a0a10", borderWidth: 2 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: "bottom", labels: { color: "#a3a3a3", font: { size: 11 } } }
+      },
+      cutout: "60%"
+    }
+  });
+  if (canvasId === "model-chart") modelChart = chart; else reasonChart = chart;
+}
+
+function renderDailyChart(labels, data) {
+  const ctx = document.getElementById("daily-chart").getContext("2d");
+  if (dailyChart) dailyChart.destroy();
+  dailyChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: labels.map(d => d.slice(5)),
+      datasets: [
+        { label: "비용 ($)", data: data.map(d => d.cost), backgroundColor: "#10b981aa", yAxisID: "y", order: 2 },
+        { label: "응답 수", data: data.map(d => d.count), type: "line", borderColor: "#f5c518", backgroundColor: "#f5c51833", yAxisID: "y1", tension: 0.3, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: "#a3a3a3" } } },
+      scales: {
+        x: { ticks: { color: "#737373", font: { size: 9 } }, grid: { color: "#1a1a28" } },
+        y: { position: "left", ticks: { color: "#10b981" }, grid: { color: "#1a1a28" }, title: { display: true, text: "비용 ($)", color: "#10b981" } },
+        y1: { position: "right", ticks: { color: "#f5c518" }, grid: { display: false }, title: { display: true, text: "응답 수", color: "#f5c518" } }
+      }
+    }
+  });
+}
+
+document.getElementById("reset-btn").onclick = () => {
+  if (!confirm("⚠️ 사용량 기록·라우팅 로그를 모두 삭제할까요? (대화 기록·프로필은 유지)")) return;
+  localStorage.removeItem("m.usage.log");
+  localStorage.removeItem("m.routing.log");
+  render();
+};
+
+render();
+// 5초마다 새로고침 (다른 탭에서 대화 시 반영)
+setInterval(render, 5000);
+</script>
+</body>
+</html>

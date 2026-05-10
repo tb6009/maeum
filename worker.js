@@ -34,17 +34,33 @@ export default {
 
     const body = await request.text();
 
+    // 요청 내용 로깅 (키 제외)
+    let parsedModel = "?", parsedSystemType = "?", parsedMsgCount = 0;
+    try {
+      const j = JSON.parse(body);
+      parsedModel = j.model || "(no model)";
+      parsedSystemType = Array.isArray(j.system) ? "array(cache_control)" : (typeof j.system);
+      parsedMsgCount = (j.messages || []).length;
+    } catch {}
+    console.log(`[req] model=${parsedModel} system=${parsedSystemType} msgs=${parsedMsgCount} keyTail=...${apiKey.slice(-4)}`);
+
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
+        "user-agent": "maeum-proxy/1.0 (+https://github.com/tb6009/maeum)",
       },
       body,
     });
 
     const respBody = await anthropicRes.text();
+    if (anthropicRes.status >= 400) {
+      console.log(`[anthropic-error] status=${anthropicRes.status} body=${respBody.slice(0, 600)}`);
+    } else {
+      console.log(`[anthropic-ok] status=${anthropicRes.status} model=${parsedModel}`);
+    }
     return new Response(respBody, {
       status: anthropicRes.status,
       headers: {
