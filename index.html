@@ -228,6 +228,7 @@ footer{padding:6px 10px max(env(safe-area-inset-bottom),8px);background:var(--su
   <button class="ver-tab" data-ver="1.3">v1.3</button>
   <button class="ver-tab" data-ver="1.4">v1.4</button>
   <button class="ver-tab active" data-ver="1.5β">v1.5β</button>
+  <button class="ver-tab" data-ver="1.6">v1.6</button>
   <div class="voice-bar"><button id="btn-tts" title="음성 출력">🔊</button><button id="btn-txt" class="on" title="텍스트 표시">📝</button></div>
   <span class="model-badge-wrap">
     <span id="model-badge" class="model-badge haiku">🌀 Haiku</span>
@@ -369,6 +370,65 @@ function detectCrisis(text){
 
 const DEEP_EMOTION_KW = ["우울","무겁","외로","공허","의미가 없","의미없","힘들어","지쳤","번아웃","화병","가슴 답답","속이 탐","한이 쌓"];
 const TRAUMA_KW = ["그때가 다시","멍해","해리","플래시백","악몽","트라우마","과호흡","공황","숨이 가빠"];
+/* v1.6 신규 키워드 (Track 2-1C §5.3) */
+const EATING_KW = ["폭식","안 먹은 지","먹고 토","토하고","굶","체중 강박","먹는 게 무서","구토"];
+const STRESS_KW = ["스트레스 너무","감당 안","정신없","쫓겨","버겁","터질 것 같","압도"];
+const SLEEP_KW  = ["잠이 안 와","자도 피곤","새벽에 깨","수면제","불면","잠 못 자","뒤척"];
+/* v1.6 SNS 인사 — 캐릭터 분담 키워드 (운영원칙 §12) */
+const BODY_KW     = ["먹","잠","수면","피곤","호르몬","갱년기","체중","혈당","소화","식단","영양"];
+const MIND_KW     = ["감정","불안","우울","스트레스","번아웃","관계","마음","생각","외로","공허"];
+const MOVEMENT_KW = ["운동","요가","필라테스","스트레칭","자세","걷","근육","유연","홈트"];
+
+/* v1.6 §SNS 시드 트렌드 (Track 5-A §6.3 — Agent 1 verified 데이터 부재 시 fallback)
+   몸→모미, 마음→마음, 운동→요기, 숨이는 참여 X. */
+const SEED_SNS_TRENDS = {
+  "모미": {
+    topic: "저속노화 식단", platform: "인스타",
+    academic: "가공식품·고당분 줄이기·항산화·단백질이 노화 마커(텔로미어·SIRT1·염증)에 영향을 준다는 연구가 있어요 (Patel 2024 Nature Aging 리뷰)",
+    controversy: '"이거 먹으면 노화 멈춤" 식 단순화는 과장. 식 외에도 잠·운동·관계가 함께 가야 의미 있는 변화가 나와요',
+    question: "본인 일상에서 한두 가지 작은 변화부터 같이 시작해볼까요?"
+  },
+  "마음": {
+    topic: "ADHD 자가진단 영상", platform: "틱톡·인스타",
+    academic: "ADHD 신경과학 자체는 매우 탄탄해요. 다만 SNS 자가진단은 정확도가 매우 낮아요 — 비슷한 증상이 우울·번아웃·디지털 환경 영향에서도 나와요",
+    controversy: "우리는 ADHD 평가 도구를 직접 사용하지 않아요. 정확한 평가는 정신건강의학과 전문의 영역",
+    question: "본인의 집중 어려움이 어떤 맥락에서 자주 나오는지부터 같이 살펴볼 수 있어요"
+  },
+  "요기": {
+    topic: "4-7-8 호흡으로 1분 만에 잠들기", platform: "유튜브",
+    academic: "호흡 조절이 자율신경에 영향을 주는 건 메타분석으로 확인됐어요 (Laborde 2022, RCT 223편)",
+    controversy: "다만 4-7-8은 숨참기(Kumbhaka) 단계가 있어서 심혈관 위험 있는 분에겐 권하지 않아요. 우리는 Cyclic sighing (Balban 2023 Cell Rep Med) 또는 4:6 호흡을 안전한 대안으로 안내해요",
+    question: "오늘 한 번 4:6 호흡 1분만 시도해볼까요?"
+  }
+};
+
+function pickCharacterFromContext(msg) {
+  const fallback = ["모미","마음","요기"][Math.floor(Math.random()*3)];
+  if (!msg) return fallback;
+  if (BODY_KW.some(k => msg.includes(k))) return "모미";
+  if (MIND_KW.some(k => msg.includes(k))) return "마음";
+  if (MOVEMENT_KW.some(k => msg.includes(k))) return "요기";
+  return fallback;
+}
+
+function maybeOfferTrendIntro(userMessage) {
+  if (currentVersion !== "1.6") return null;
+  if (localStorage.getItem("m.snsIntro.off") === "1") return null;
+  const today = new Date().toISOString().slice(0,10);
+  const lastDay = localStorage.getItem("m.snsIntro.lastDay");
+  if (lastDay === today) return null;
+  const character = pickCharacterFromContext(userMessage);
+  const trend = SEED_SNS_TRENDS[character];
+  if (!trend) return null;
+  localStorage.setItem("m.snsIntro.lastDay", today);
+  localStorage.setItem("m.snsIntro.lastChar", character);
+  return { character, trend };
+}
+
+function renderTrendIntro(character, trend) {
+  const tone = { "모미": "🫂 ◉◡◉", "마음": "🎭 【⊡ _ ⊡】", "요기": "🧘 (｡^‿^｡)" }[character];
+  return `${tone} 요즘 ${trend.platform}에서 "${trend.topic}" 얘기 많이 보이던데, 들어봤어요?\n사실 ${trend.academic}.\n다만 ${trend.controversy}.\n${trend.question}`;
+}
 
 /* ============================================================
    localStorage 키 (v1.5 기준 — 변경 금지)
@@ -853,6 +913,103 @@ ${profileSection}
 자, ${name}과 대화 시작.`;
 }
 
+/* --- buildPromptV16: v1.5β 위에 §PROBE + §SNS 추가 (Track 2-1C, 운영원칙 §10 v1.6-personal + §12) --- */
+function buildPromptV16(p) {
+  const base = buildPromptV15(p);
+  const name = p.name ? p.name + "님" : "상대방";
+  const probeSection = `
+
+# §PROBE — 진단·평가 도구 자연어 프로브 정책 (v1.6-personal)
+
+너는 평가자가 아니라 안내자다. 다음 5개 영역에서 사용자 발화가 트리거와
+일치하면, 척도 문항을 그대로 묻지 말고 본 §PROBE 의 자연어 프로브를
+대화 흐름 안에서 부드럽게 물어본다. 점수를 매기지 않는다.
+
+## §4.2 자살위험 (C-SSRS) — 숨이
+트리거: "죽고 싶/사라지고 싶/없어졌으면/잠들면 안 깼으면"
+프로브 (1~4):
+1. 요즘 "차라리 없어졌으면" 같은 생각이 떠오른 적 있어요?
+2. 그 생각이 잠깐 스쳤어요, 자꾸 돌아왔어요?
+3. "이렇게 하면 될 것 같다" 같은 구체적 그림이 떠오른 적 있어요?
+4. 예전에 비슷한 행동을 시도해본 적 있어요?
+임계치: 1개라도 yes → 안내 + 109 모달 동시.
+안내: "Columbia Lighthouse Project의 C-SSRS, 6문항·5분.
+참고용·임상 평가 대체 X. 지금 109 / 1577-0199 / 112-119 /
+정신건강복지센터 즉시 연결."
+
+## §4.3 트라우마 (PC-PTSD-5) — 숨이
+트리거: "악몽/플래시백/그 일 이후/몸이 굳/깜짝/멍해"
+프로브 (5문항, DSM-5 5개 도메인):
+1. 떠올리고 싶지 않은 일이 꿈·장면으로 자꾸 돌아와요?
+2. 그 일을 떠올리게 하는 사람·장소·상황을 피하려 애써요?
+3. 작은 소리·움직임에도 평소보다 많이 놀라거나 긴장돼요?
+4. 감정이 멍하거나 세상과 멀어진 느낌 들 때 있어요?
+5. "내 탓이다" "세상이 다 위험하다" 생각이 강해졌어요?
+임계치: 2개 이상 yes → 안내.
+안내: "VA National Center for PTSD의 PC-PTSD-5, 5문항.
+참고용·임상 평가 대체 X. 트라우마 전문 임상가·정신건강복지센터·
+정신건강의학과 전문의 권함."
+
+## §4.4 섭식 (EAT-26) — 모미·숨이
+트리거: "폭식/안 먹은 지/먹고 토/토하고/굶/체중 강박/먹는 게 무서"
+프로브 (5문항):
+1. 음식·체중 생각이 하루 중 많은 시간을 차지해요?
+2. 한 번 시작하면 멈추기 힘들 만큼 먹은 적 있어요?
+3. 먹고 나서 일부러 토하거나, 굶거나, 격하게 운동한 적 있어요?
+4. 주변에서 "더 먹어" 말이 부담스럽거나 화나요?
+5. 거울에 비친 몸을 자주 확인하거나 일부러 피하게 돼요?
+임계치: 2개 이상 yes. 3번 단독 yes는 즉시.
+안내: "David Garner의 EAT-26, 26문항, 한국어판 있음.
+참고용·임상 평가 대체 X. 한국섭식장애협회 / 정신건강복지센터 /
+섭식장애 클리닉 보유 정신건강의학과 권함."
+
+## §4.5 스트레스 (PSS) — 마음·모미
+트리거: "스트레스 너무/감당 안/정신없/쫓겨/버겁/터질 것 같"
+프로브 (4문항, PSS-4 도메인):
+1. 일이 내 손을 떠난 것처럼 통제 안 된다고 느낀 적 많아요?
+2. 예상치 못한 일에 자주 흔들리고 마음이 무너졌어요?
+3. 해야 할 일이 너무 많아 압도된 느낌, 자주 들었어요?
+4. 평소보다 짜증·화가 자주 올라왔어요?
+임계치: 3개 이상 yes → 안내.
+안내: "Sheldon Cohen의 PSS-10 (또는 PSS-4), 한 달 단위.
+한 번 점수보다 반복 측정 변화가 가치 있음. 참고용·임상 평가 대체 X.
+지속·일상 기능 저하 시 정신건강의학과·임상심리상담 권함."
+
+## §4.6 수면 (PSQI) — 모미
+트리거: "잠이 안 와/자도 피곤/새벽에 깨/수면제/불면/잠 못 자"
+프로브 (5문항):
+1. 잠들기까지 보통 30분 이상 걸리는 날이 일주일에 3일 이상이에요?
+2. 밤중에 깨거나 새벽 일찍 깨서 다시 잠들기 어려운 적 자주 있어요?
+3. 자고 일어나도 개운하지 않은 날이 더 많아요?
+4. 낮에 졸리거나 집중이 안 되는 일이 자주 있어요?
+5. 수면제·수면유도제·술의 힘을 빌리는 일이 있어요?
+임계치: 3개 이상 yes. 5번 단독 yes도 진입.
+안내: "University of Pittsburgh의 PSQI, 19문항, 한 달 단위.
+5점 넘으면 수면질 저하. CBT-I 핵심: 일정한 기상·취침, 카페인·알코올
+조정, 잠 안 올 때 침대에서 다른 일 안 하기. 참고용·임상 평가 대체 X.
+한 달 이상 지속 시 수면클리닉 권함."
+
+## §PROBE-원칙
+1. 평가자 아닌 안내자. 점수 매기지 않음.
+2. 임계치 충족 전까지 일상 대화 유지.
+3. 위험군 트리거(자살·트라우마·섭식)는 임계치 무시 즉시 자원 연결.
+4. 안내 시 4종 필수: 도구 정식 명칭 + 개발자/소속 + 문항 수·소요 시간 +
+   면책 ("참고용·임상 평가 대체 X") + 전문가 권유.
+5. 디지털 상업 사용 없음 (오픈소스·개인용·비영리·PII 비수집).
+
+# §SNS — 동향 인사 ("들어봤어요?" 운영원칙 §12)
+- 대화 시작 또는 적절한 맥락에서 maybeOfferTrendIntro() 결과가 있으면
+  본문 앞에 한 번 전달.
+- 몸→모미, 마음→마음, 운동→요기. 숨이는 §SNS 참여 X.
+- SNS 인용은 C-tier. 반드시 S/A tier 학술 근거로 변환.
+- 쟁점 영역은 양면 구조 (§8): "사실 학술 근거는 ___ / 다만 단순화는
+  과장 / 본인 일상에서는 ___" 형태.
+
+자, ${name}과 대화 시작 (v1.6-personal).`;
+
+  return base + probeSection;
+}
+
 /* ============================================================
    VERSIONS 정책 객체 (스펙 §4)
    ============================================================ */
@@ -883,6 +1040,17 @@ const VERSIONS = {
     systemPromptFn: buildPromptV15,
     routingMode: "full",
     showScales: true,
+  },
+  "1.6": {
+    label: "v1.6",
+    subtitle: "프로브·진단지 안내 + SNS 동향 (개인·오픈소스)",
+    activeChars: ["마음", "모미", "요기", "숨이"],
+    inactiveChars: [],
+    systemPromptFn: buildPromptV16,
+    routingMode: "full_v16",
+    showScales: false,
+    showProbes: true,
+    showSnsIntro: true,
   }
 };
 
@@ -893,7 +1061,21 @@ let currentVersion = localStorage.getItem(LS.VERSION) || "1.5β";
    ============================================================ */
 function selectModel(userMessage, mode) {
   if (mode === undefined) mode = "full";
-  if (detectCrisis(userMessage)) return { model: MODEL_SONNET, reason: "crisis" };
+  if (detectCrisis(userMessage)) return { model: MODEL_SONNET, reason: "crisis", probe: "cssrs" };
+  /* v1.6 — full_v16 분기 (Track 2-1C §5.2). full 분기와 별도로 처리 */
+  if (mode === "full_v16") {
+    if (TRAUMA_KW.some(k => userMessage.includes(k)))
+      return { model: MODEL_SONNET, reason: "trauma_signal", probe: "pcptsd5" };
+    if (EATING_KW.some(k => userMessage.includes(k)))
+      return { model: MODEL_SONNET, reason: "eating_signal", probe: "eat26" };
+    if (STRESS_KW.some(k => userMessage.includes(k)))
+      return { model: MODEL_SONNET, reason: "stress_signal", probe: "pss" };
+    if (SLEEP_KW.some(k => userMessage.includes(k)))
+      return { model: MODEL_SONNET, reason: "sleep_signal", probe: "psqi" };
+    if (DEEP_EMOTION_KW.some(k => userMessage.includes(k)))
+      return { model: MODEL_SONNET, reason: "deep_emotion" };
+    return { model: MODEL_HAIKU, reason: "daily" };
+  }
   if (mode === "full" && TRAUMA_KW.some(k => userMessage.includes(k)))
     return { model: MODEL_SONNET, reason: "trauma_signal" };
   if (DEEP_EMOTION_KW.some(k => userMessage.includes(k)))
@@ -977,7 +1159,8 @@ function updateRoutingUI(model, reason) {
   updateModelBadge(model);
   document.getElementById("route-reason").textContent = ({
     daily:"일상", crisis:"위기", trauma_signal:"트라우마 단서",
-    deep_emotion:"깊은 정서", measurement:"측정 진행", user_override:"수동"
+    deep_emotion:"깊은 정서", measurement:"측정 진행", user_override:"수동",
+    eating_signal:"섭식 단서", stress_signal:"스트레스 단서", sleep_signal:"수면 단서"
   })[reason] || reason;
   // 오늘 비용 갱신
   const today = new Date().toISOString().slice(0,10);
@@ -1189,7 +1372,15 @@ async function callAPI(userText,opts={}){
     updateRoutingUI(model, reason);
 
     /* 버전별 시스템 프롬프트 */
-    const sysText = vCfg ? vCfg.systemPromptFn(profile) : buildPromptV15(profile);
+    let sysText = vCfg ? vCfg.systemPromptFn(profile) : buildPromptV15(profile);
+    /* v1.6 — §SNS 동향 인사 1일 1회 합성 (운영원칙 §12) */
+    if (currentVersion === "1.6" && vCfg && vCfg.showSnsIntro) {
+      const intro = maybeOfferTrendIntro(userText);
+      if (intro) {
+        const rendered = renderTrendIntro(intro.character, intro.trend);
+        sysText += `\n\n# §SNS-TODAY (이번 응답에서 한 번 자연스럽게 활용 가능)\n사용자 맥락 캐릭터: ${intro.character}\n오늘의 트렌드 인사 시안 ↓\n---\n${rendered}\n---\n위 시안을 응답 도입부에 자연스럽게 녹여줘. 그대로 복사 X, 캐릭터 톤 유지. 위기 라우팅(crisis/eating_signal/trauma_signal) 활성 시 §SNS-TODAY 생략하고 안전 응답 우선.`;
+      }
+    }
     const isCacheable = !model.includes("haiku");
     const systemField = isCacheable
       ? [{ type: "text", text: sysText, cache_control: { type: "ephemeral" } }]
