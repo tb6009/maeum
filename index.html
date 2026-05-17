@@ -1361,11 +1361,11 @@ function fixFace(who,text){
 
 function splitBlocks(text){
   if(!text)return[];
-  /* 캐릭터 헤더 인식 — bosalpigo-gpt 레퍼런스 패턴:
-     · 이모지 prefix 옵션 (LLM이 누락해도 OK)
-     · **bold**/__bold__ markdown 래퍼 허용
-     · 전각 콜론 ：도 허용
-     · 줄 시작 또는 단락 직후만 헤더로 인정 (본문 중간 단어 "마음:" 오탐 방지) */
+  /* 캐릭터 헤더 인식 (bosalpigo-gpt 레퍼런스 패턴):
+     - 이모지 prefix 옵션 (LLM이 누락해도 OK)
+     - markdown bold 래퍼 (별표 2개·언더스코어 2개) 허용
+     - 전각 콜론 ：도 허용
+     - 줄 시작 또는 단락 직후만 헤더로 인정 (본문 중간 단어 오탐 방지) */
   const headerPat=/(?:^|\n)\s*(?:\*{1,2}|__)?\s*(?:[🫂🎭🧘🌙]\s*)?(마음|모미|요기|숨이)\s*[:：]\s*(?:\*{1,2}|__)?\s*/gu;
   if(!headerPat.test(text))return[];
   headerPat.lastIndex=0;
