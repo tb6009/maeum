@@ -1361,24 +1361,43 @@ function fixFace(who,text){
 
 function splitBlocks(text){
   if(!text)return[];
-  const pat=/(🫂\s*모미\s*:|🎭\s*마음\s*:|🧘\s*요기\s*:|🌙\s*숨이\s*:)/g;
-  if(!pat.test(text))return[];
-  const parts=text.split(pat).filter(s=>s&&s.trim());
-  const out=[];
-  for(let i=0;i<parts.length;i++){
-    const p=parts[i];
-    if(/🫂\s*모미/.test(p)){out.push({who:"momi",label:"🫂 모미",text:parts[++i]||""})}
-    else if(/🎭\s*마음/.test(p)){out.push({who:"maeum",label:"🎭 마음",text:parts[++i]||""})}
-    else if(/🧘\s*요기/.test(p)){out.push({who:"yogi",label:"🧘 요기",text:parts[++i]||""})}
-    else if(/🌙\s*숨이/.test(p)){out.push({who:"sumi",label:"🌙 숨이",text:parts[++i]||""})}
-    else if(p.trim().length>10){out.push({who:"maeum",label:"🎭 마음",text:p})}
+  /* 캐릭터 헤더 인식 — bosalpigo-gpt 레퍼런스 패턴:
+     · 이모지 prefix 옵션 (LLM이 누락해도 OK)
+     · **bold**/__bold__ markdown 래퍼 허용
+     · 전각 콜론 ：도 허용
+     · 줄 시작 또는 단락 직후만 헤더로 인정 (본문 중간 단어 "마음:" 오탐 방지) */
+  const headerPat=/(?:^|\n)\s*(?:\*{1,2}|__)?\s*(?:[🫂🎭🧘🌙]\s*)?(마음|모미|요기|숨이)\s*[:：]\s*(?:\*{1,2}|__)?\s*/gu;
+  if(!headerPat.test(text))return[];
+  headerPat.lastIndex=0;
+  const heads=[]; let m;
+  while((m=headerPat.exec(text))!==null){
+    heads.push({start:m.index,end:headerPat.lastIndex,name:m[1]});
   }
-  return out.filter(b=>b.text.trim());
+  if(!heads.length)return[];
+  const NAME2WHO={"마음":"maeum","모미":"momi","요기":"yogi","숨이":"sumi"};
+  const WHO2LABEL={maeum:"🎭 마음",momi:"🫂 모미",yogi:"🧘 요기",sumi:"🌙 숨이"};
+  const cleanBody=s=>s.replace(/^[\s*_]+|[\s*_]+$/g,"");
+  const out=[];
+  /* 첫 헤더 이전 인트로 텍스트도 마음 솔로로 살린다 */
+  const intro=cleanBody(text.substring(0,heads[0].start));
+  if(intro.length>8){
+    out.push({who:"maeum",label:WHO2LABEL.maeum,text:intro});
+  }
+  for(let i=0;i<heads.length;i++){
+    const cur=heads[i],next=heads[i+1];
+    const body=cleanBody(text.substring(cur.end,next?next.start:text.length));
+    if(!body)continue;
+    const who=NAME2WHO[cur.name];
+    out.push({who,label:WHO2LABEL[who],text:body});
+  }
+  return out;
 }
 
-function addTyping(){
+function addTyping(who){
+  who=who||"momi";
+  const av=CHAR_AV[who]||CHAR_AV.momi;
   const turn=document.createElement("div");turn.className="turn";turn.id="typing-turn";
-  turn.innerHTML=`<div class="bbl momi"><div class="av">(◉◡◉)</div><div class="body"><div class="typing momi-t"><span></span><span></span><span></span></div></div></div>`;
+  turn.innerHTML=`<div class="bbl ${who}"><div class="av">${av}</div><div class="body"><div class="typing ${who}-t"><span></span><span></span><span></span></div></div></div>`;
   chatEl.appendChild(turn);chatEl.scrollTop=chatEl.scrollHeight;return turn;
 }
 function removeTyping(){const t=$("#typing-turn");if(t)t.remove()}
@@ -1394,7 +1413,12 @@ async function callAPI(userText,opts={}){
   history.push({role:"user",content:userText});
   localStorage.setItem(LS.HIST,JSON.stringify(history));
   if(!opts.hidden)addUser(userText);
-  const typ=addTyping();sendBtn.disabled=true;
+  /* 타이핑 인디케이터를 라우팅 추정 캐릭터 색으로 — v1.6 컨텍스트 기반, 외 버전은 모미 기본 */
+  const KO2WHO={"마음":"maeum","모미":"momi","요기":"yogi","숨이":"sumi"};
+  const typingWho = (currentVersion==="1.6" && typeof pickCharacterFromContext==="function")
+    ? (KO2WHO[pickCharacterFromContext(userText)]||"momi")
+    : "momi";
+  const typ=addTyping(typingWho);sendBtn.disabled=true;
   try{
     const proxy=localStorage.getItem(LS.PROXY);
     const ep=proxy?(proxy+"/v1/messages"):"https://api.anthropic.com/v1/messages";
